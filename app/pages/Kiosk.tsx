@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useFingerprint } from "@/hooks/useFingerprint";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, ChevronLeft } from "lucide-react";
-import { attendanceService, studentService } from "@/services/api";
+import api from "@/services/api";
 import type { Student } from "@/services/api";
+import { CheckCircle2, XCircle, ChevronLeft, Fingerprint } from "lucide-react";
+// import { attendanceService, studentService } from "@/services/api";
+// import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface AttendanceRecord {
   id: string;
@@ -17,25 +19,28 @@ interface AttendanceRecord {
 }
 
 const Kiosk = () => {
-  const [rfid, setRfid] = useState("");
   const [lastStudent, setLastStudent] = useState<Student | null>(null);
   const [scanStatus, setScanStatus] = useState<
     "idle" | "success" | "error" | "processing"
   >("idle");
   const [message, setMessage] = useState(
-    "Scan your RFID card on the scanner device",
+    "Position your finger on the scanner",
   );
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [scanCountdown, setScanCountdown] = useState(5);
+  const [scanCountdown, setScanCountdown] = useState(3);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showFingerprintModal, setShowFingerprintModal] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<
     AttendanceRecord[]
   >([]);
 
-  const [hoverExit, setHoverExit] = useState(false); // hover state for exit button
+  const [hoverExit, setHoverExit] = useState(false);
+
+  // 🔥 FINGERPRINT INTEGRATION
+  const { state: fingerprintState, enumerateDevices, startCapture, stopCapture, clearData } = useFingerprint();
+  const [fingerprintProcessing, setFingerprintProcessing] = useState(false);
 
   const navigate = useNavigate();
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const successSound = useRef(new Audio("/sounds/success.mp3"));
   const errorSound = useRef(new Audio("/sounds/error.mp3"));
@@ -59,25 +64,39 @@ const Kiosk = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Autofocus
+  // Initialize fingerprint scanner on mount
   useEffect(() => {
-    const focusInterval = setInterval(() => inputRef.current?.focus(), 100);
-    return () => clearInterval(focusInterval);
-  }, []);
+    const initFingerprint = async () => {
+      try {
+        await enumerateDevices();
+        await startCapture();
+      } catch (err) {
+        console.error("Failed to initialize fingerprint scanner:", err);
+        setMessage("Fingerprint scanner not available");
+      }
+    };
+    initFingerprint();
+
+    return () => {
+      stopCapture().catch(() => {});
+    };
+  }, [enumerateDevices, startCapture, stopCapture]);
 
   // Success / Error Effects
   useEffect(() => {
     if (scanStatus === "success") {
       successSound.current.play();
+      setShowFingerprintModal(true);
 
       const countdown = setInterval(() => {
         setScanCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(countdown);
             setScanStatus("idle");
-            setMessage("Scan your RFID card on the scanner device");
+            setMessage("Position your finger on the scanner");
             setLastStudent(null);
-            return 5;
+            setShowFingerprintModal(false);
+            return 3;
           }
           return prev - 1;
         });
@@ -91,44 +110,82 @@ const Kiosk = () => {
     }
   }, [scanStatus]);
 
-  const handleScan = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!rfid.trim()) return;
+  // 🔥 FINGERPRINT SCANNING - Auto-process when fingerprint is captured
+  useEffect(() => {
+    if (fingerprintState.latestIntermediateData && !fingerprintProcessing && scanStatus === "idle") {
+      handleFingerprintScan();
+    }
+  }, [fingerprintState.latestIntermediateData, fingerprintProcessing, scanStatus]);
 
+  // 🔥 FINGERPRINT HANDLER - Process fingerprint scan with backend API
+  const handleFingerprintScan = async () => {
+    if (!fingerprintState.latestIntermediateData) return;
+    
     try {
+      setFingerprintProcessing(true);
       setScanStatus("processing");
-      setMessage("Processing RFID scan...");
+      setMessage("Processing fingerprint...");
 
-      const res = await attendanceService.timeIn(rfid);
+      // 🔥 CALL BACKEND API - Save/Identify fingerprint
+      const response = await api.post("/set-fingerprint", {
+        fingerprint_id: fingerprintState.latestIntermediateData,
+      });
 
-      if (res.attendance) {
-        setScanStatus("success");
-        setMessage(
-          `Time IN recorded at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-        );
+      console.log("Fingerprint API Response:", response.data);
 
-        const students = await studentService.getAllStudents();
-        const student = students.find(
-          (s: Student) => s.rfid_tag_number === rfid,
-        );
-        if (student) setLastStudent(student);
+      // Get the fingerprint data from response
+      const fingerprintData = response.data.data;
+      
+      setScanStatus("success");
+      setMessage("Fingerprint identified successfully!");
+      
+      // For now, mock student data - in production, backend would return student ID
+      // TODO: Enhance backend to return student info with fingerprint match
+      const mockStudent: Student = {
+        id: 1,
+        first_name: "John",
+        last_name: "Doe",
+        student_number: "STU-2024-001",
+        email: "john.doe@student.com",
+        rfid_tag_number: "FINGERPRINT-MODE",
+        fingerprint_id: fingerprintData.fingerprint_id,
+      };
+      
+      setLastStudent(mockStudent);
 
-        setRfid("");
-        return;
-      }
-    } catch {
-      try {
-        const res = await attendanceService.timeOut(rfid);
+      // Add to attendance records
+      const now = new Date();
+      const timeString = now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      const dateString = now.toLocaleDateString();
 
-        if (res.attendance) {
-          setScanStatus("success");
-          setMessage(`Time OUT recorded`);
-          setRfid("");
-        }
-      } catch {
-        setScanStatus("error");
-        setMessage("Scan failed. Please try again.");
-      }
+      const newRecord: AttendanceRecord = {
+        id: fingerprintData.id || Date.now().toString(),
+        firstName: mockStudent.first_name,
+        lastName: mockStudent.last_name,
+        studentNumber: mockStudent.student_number,
+        time: timeString,
+        date: dateString,
+        status: "In",
+      };
+      setAttendanceRecords((prev) => [newRecord, ...prev]);
+      
+      // Clear fingerprint data and restart capture
+      setTimeout(() => {
+        clearData();
+        setFingerprintProcessing(false);
+        setScanCountdown(3);
+      },);
+      
+    } catch (error: any) {
+      setScanStatus("error");
+      const errorMsg = error.response?.data?.message || "Fingerprint identification failed";
+      setMessage(errorMsg);
+      console.error("Fingerprint error:", error);
+      setFingerprintProcessing(false);
     }
   };
 
@@ -190,43 +247,24 @@ const Kiosk = () => {
         .exit-button.show {
           opacity: 1;
         }
-         @keyframes cardSwipe {
-  0% {
-    transform: translateX(20px) rotate(-2deg);
-  }
-  40% {
-    transform: translateX(-80px) rotate(-2deg);
-  }
-  60% {
-    transform: translateX(-80px) rotate(-2deg);
-  }
-  100% {
-    transform: translateX(20px) rotate(-2deg);
-  }
-}
       `}</style>
 
       {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute w-[800px] h-[800px] bg-blue-500/20 blur-3xl rounded-full top-[-300px] left-[-300px] animate-pulse" />
+        <div className="absolute w-[800px] h-[800px] bg-blue-500/20 blur-3xl rounded-full top-[-300px] left-[-300px] " />
         <div
-          className="absolute w-[600px] h-[600px] bg-cyan-400/20 blur-3xl rounded-full bottom-[-200px] right-[-200px] animate-pulse"
+          className="absolute w-[600px] h-[600px] bg-cyan-400/20 blur-3xl rounded-full bottom-[-200px] right-[-200px] "
           style={{ animationDelay: "1s" }}
         />
         <div
-          className="absolute w-[500px] h-[500px] bg-indigo-400/10 blur-3xl rounded-full top-1/2 left-1/2 animate-pulse"
+          className="absolute w-[500px] h-[500px] bg-indigo-400/10 blur-3xl rounded-full top-1/2 left-1/2 "
           style={{ animationDelay: "2s" }}
         />
       </div>
 
       {/* Hidden Input */}
-      <form onSubmit={handleScan} className="opacity-0 absolute">
-        <input
-          ref={inputRef}
-          value={rfid}
-          onChange={(e) => setRfid(e.target.value)}
-          autoFocus
-        />
+      <form onSubmit={(e) => e.preventDefault()} className="opacity-0 absolute">
+        <input readOnly />
       </form>
 
       {/* Exit Button - hover top-left */}
@@ -350,291 +388,146 @@ const Kiosk = () => {
             <div className="w-full flex flex-col items-center justify-center">
               {/* Instruction */}
               <p className="text-lg text-blue-100 mb-8 font-medium">
-                Tap your RFID card on the scanner device
+                Position your finger on the scanner to verify attendance
               </p>
 
               {/* Kiosk Machine with Hand Tapping */}
               <div className="relative mb-8 flex items-center justify-center h-80">
-                <style>{`
-              @keyframes cardTap {
-                0%, 100% { transform: translateX(0) translateY(0); }
-                50% { transform: translateX(-20px) translateY(-5px); }
-              }
-              
-              @keyframes nfcPulse {
-                0%, 100% { opacity: 0.3; r: 45px; }
-                50% { opacity: 0.6; r: 65px; }
-              }
-              
-              @keyframes nfcWave {
-                0%, 100% { opacity: 0; r: 30px; }
-                50% { opacity: 0.6; r: 80px; }
-              }
-            `}</style>
+                {/* Animation Styles */}
+              <style>{`
+                @keyframes scanningBounce {
+                  0%, 100% { transform: scale(1); }
+                  50% { transform: scale(1.1); }
+                }
+                @keyframes scanningGlow {
+                  0%, 100% { 
+                    filter: drop-shadow(0 0 5px rgba(0, 217, 255, 0.5));
+                  }
+                  50% { 
+                    filter: drop-shadow(0 0 20px rgba(0, 217, 255, 1));
+                  }
+                }
+                @keyframes horizontalScanLine {
+                  0% {
+                    transform: translateY(-120px);
+                    opacity: 0;
+                  }
+                  10% {
+                    opacity: 1;
+                  }
+                  90% {
+                    opacity: 1;
+                  }
+                  100% {
+                    transform: translateY(120px);
+                    opacity: 0;
+                  }
+                }
+                @keyframes scannerRing {
+                  0%, 100% {
+                    r: 60px;
+                    opacity: 0.3;
+                  }
+                  50% {
+                    r: 100px;
+                    opacity: 0;
+                  }
+                }
+                @keyframes scanBoxBorder {
+                  0%, 100% {
+                    stroke-dashoffset: 0;
+                    opacity: 0.4;
+                  }
+                  50% {
+                    stroke-dashoffset: -400;
+                    opacity: 0.9;
+                  }
+                }
+                @keyframes cornerScan {
+                  0% {
+                    opacity: 0;
+                    r: 8;
+                  }
+                  50% {
+                    opacity: 1;
+                    r: 12;
+                  }
+                  100% {
+                    opacity: 0;
+                    r: 8;
+                  }
+                }
+               
+                .scanning-line {
+                  animation: horizontalScanLine 2s ease-in-out infinite;
+                }
+                .scanner-ring {
+                  animation: scannerRing 2s ease-in-out infinite;
+                }
+                .scan-box-border {
+                  animation: scanBoxBorder 3s ease-in-out infinite;
+                }
+                .corner-dot {
+                  animation: cornerScan 2s ease-in-out infinite;
+                }
+              `}</style>
 
-                {/* NFC Card Reader Device */}
+              {/* Fingerprint Icon with Scanning Animation */}
+              <div className="relative flex items-center justify-center">
+                {/* Scanner Rings */}
                 <svg
-                  viewBox="0 0 300 400"
-                  className="w-64 h-80 drop-shadow-2xl relative z-10 cursor-pointer hover:drop-shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all duration-300 transform hover:scale-105"
-                  preserveAspectRatio="xMidYMid meet"
-                  onClick={handleTestClick}
+                  className="absolute w-64 h-64 pointer-events-none"
+                  viewBox="0 0 300 300"
+                  xmlns="http://www.w3.org/2000/svg"
                 >
-                  {/* Device Body */}
-                  <rect
-                    x="30"
-                    y="40"
-                    width="240"
-                    height="320"
-                    rx="25"
-                    fill="#1e3a5f"
-                    stroke="#60a5fa"
-                    strokeWidth="3"
-                  />
-
-                  {/* Top Rounded Corners - Detail */}
-                  <rect
-                    x="35"
-                    y="45"
-                    width="230"
-                    height="40"
-                    rx="20"
-                    fill="#0f172a"
-                    opacity="0.5"
-                  />
-
-                  {/* Screen Area */}
+                  {/* Scanning Box Frame */}
                   <rect
                     x="50"
-                    y="80"
+                    y="50"
                     width="200"
-                    height="150"
-                    rx="15"
-                    fill="#0f172a"
-                    stroke="#475569"
+                    height="200"
+                    fill="none"
+                    stroke="#00d9ff"
                     strokeWidth="2"
-                  />
-
-                  {/* Screen Inner Glow */}
-                  <rect
-                    x="55"
-                    y="85"
-                    width="190"
-                    height="140"
-                    rx="12"
-                    fill="#1e293b"
-                    opacity="0.6"
-                  />
-
-                  {/* Top Blue Accent Line */}
-                  <rect
-                    x="55"
-                    y="85"
-                    width="190"
-                    height="20"
+                    strokeDasharray="20,10"
+                    className="scan-box-border"
                     rx="10"
-                    fill="#3b82f6"
-                    opacity="0.3"
                   />
 
-                  {/* NFC Symbol - Center of Device */}
-                  <g>
-                    {/* Outer Circle */}
-                    <circle
-                      cx="150"
-                      cy="155"
-                      r="35"
-                      fill="none"
-                      stroke="#60a5fa"
-                      strokeWidth="3"
-                      opacity="0.8"
-                    />
-                    {/* Middle Circle */}
-                    <circle
-                      cx="150"
-                      cy="155"
-                      r="25"
-                      fill="none"
-                      stroke="#60a5fa"
-                      strokeWidth="2"
-                      opacity="0.6"
-                    />
-                    {/* Inner Circle */}
-                    <circle
-                      cx="150"
-                      cy="155"
-                      r="8"
-                      fill="#60a5fa"
-                      opacity="0.8"
-                    />
-                    {/* Top Right Wave */}
-                    <path
-                      d="M 165 140 Q 175 135 180 145"
-                      fill="none"
-                      stroke="#60a5fa"
-                      strokeWidth="2"
-                      opacity="0.7"
-                    />
-                    {/* Bottom Right Wave */}
-                    <path
-                      d="M 168 165 Q 178 170 185 165"
-                      fill="none"
-                      stroke="#60a5fa"
-                      strokeWidth="2"
-                      opacity="0.7"
-                    />
-                  </g>
+                  {/* Corner Dots */}
+                  <circle cx="50" cy="50" r="8" fill="#00d9ff" className="corner-dot" opacity="0.6" />
+                  <circle cx="250" cy="50" r="8" fill="#00d9ff" className="corner-dot" opacity="0.6" style={{ animationDelay: "0.5s" }} />
+                  <circle cx="50" cy="250" r="8" fill="#00d9ff" className="corner-dot" opacity="0.6" style={{ animationDelay: "1s" }} />
+                  <circle cx="250" cy="250" r="8" fill="#00d9ff" className="corner-dot" opacity="0.6" style={{ animationDelay: "1.5s" }} />
 
-                  {/* Animated NFC Pulse Rings */}
+                  {/* Scanner Rings */}
                   <circle
                     cx="150"
-                    cy="155"
-                    r="45"
+                    cy="150"
+                    r="60"
                     fill="none"
-                    stroke="#60a5fa"
+                    stroke="#00d9ff"
                     strokeWidth="2"
-                    opacity="0.3"
-                    style={{
-                      animation: "nfcPulse 1.5s ease-out infinite",
-                    }}
-                  />
-
-                  {/* Animated NFC Pulse Wave */}
-                  <circle
-                    cx="150"
-                    cy="155"
-                    r="30"
-                    fill="none"
-                    stroke="#60a5fa"
-                    strokeWidth="1.5"
-                    opacity="0"
-                    style={{
-                      animation: "nfcWave 1.5s ease-out infinite",
-                    }}
-                  />
-
-                  {/* Bottom Panel */}
-                  <rect
-                    x="30"
-                    y="300"
-                    width="240"
-                    height="60"
-                    rx="15"
-                    fill="#0f172a"
-                    stroke="#60a5fa"
-                    strokeWidth="2"
-                  />
-
-                  {/* Status Light */}
-                  <circle cx="60" cy="330" r="6" fill="#10b981" opacity="0.8" />
-                  <circle
-                    cx="60"
-                    cy="330"
-                    r="6"
-                    fill="#10b981"
-                    opacity="0.4"
-                    style={{
-                      animation: "nfcPulse 1s ease-in-out infinite",
-                    }}
+                    className="scanner-ring"
+                    opacity="0.5"
                   />
                 </svg>
 
-                {/* Card Animation with RFID Text */}
-                <svg
-                  viewBox="0 0 300 200"
-                  className="absolute w-72 h-40 drop-shadow-2xl"
+                {/* Scanning Line */}
+                <div className="absolute w-48 h-1 bg-gradient-to-b from-transparent via-cyan-400 to-transparent scanning-line" 
                   style={{
-                    left: "-80px",
-                    top: "60px",
-                    animation: "cardSwipe 1.5s ease-in-out infinite",
-                    zIndex: 20,
+                    boxShadow: "0 0 15px rgba(0, 217, 255, 0.8)",
                   }}
-                  preserveAspectRatio="xMidYMid meet"
-                >
-                  {/* Card - Front */}
-                  <rect
-                    x="20"
-                    y="20"
-                    width="260"
-                    height="160"
-                    rx="16"
-                    fill="#ffffff"
-                    stroke="#e5e7eb"
-                    strokeWidth="2"
-                    filter="drop-shadow(0 8px 24px rgba(0,0,0,0.3))"
-                  />
+                />
 
-                  {/* Card Shine */}
-                  <rect
-                    x="20"
-                    y="20"
-                    width="260"
-                    height="40"
-                    rx="16"
-                    fill="#f3f4f6"
-                    opacity="0.6"
+                {/* Fingerprint Icon */}
+                <div className="absolute">
+                  <Fingerprint 
+                    className="w-48 h-60 text-cyan-400 animate-fingerprint-scan"
+                    strokeWidth={0.5}
                   />
-
-                  {/* RFID Text */}
-                  <text
-                    x="150"
-                    y="115"
-                    textAnchor="middle"
-                    fontSize="28"
-                    fontWeight="bold"
-                    fill="#1e293b"
-                    fontFamily="Arial, sans-serif"
-                  >
-                    RFID
-                  </text>
-
-                  {/* Card Chip */}
-                  <rect
-                    x="40"
-                    y="70"
-                    width="40"
-                    height="40"
-                    rx="4"
-                    fill="#fbbf24"
-                    stroke="#f59e0b"
-                    strokeWidth="1.2"
-                  />
-                  <line
-                    x1="50"
-                    y1="70"
-                    x2="50"
-                    y2="110"
-                    stroke="#f59e0b"
-                    strokeWidth="0.6"
-                  />
-                  <line
-                    x1="60"
-                    y1="70"
-                    x2="60"
-                    y2="110"
-                    stroke="#f59e0b"
-                    strokeWidth="0.6"
-                  />
-                  <line
-                    x1="70"
-                    y1="70"
-                    x2="70"
-                    y2="110"
-                    stroke="#f59e0b"
-                    strokeWidth="0.6"
-                  />
-
-                  {/* Card Shadow Overlay */}
-                  <rect
-                    x="20"
-                    y="20"
-                    width="260"
-                    height="160"
-                    rx="16"
-                    fill="none"
-                    stroke="rgba(0,0,0,0.05)"
-                    strokeWidth="8"
-                  />
-                </svg>
+                </div>
+              </div>
               </div>
 
               {/* STATUS */}
@@ -658,31 +551,6 @@ const Kiosk = () => {
                 </div>
               )}
 
-              {scanStatus === "success" && lastStudent && (
-                <div className="space-y-4 animate-fade-in text-center">
-                  <CheckCircle2 className="h-20 w-20 text-green-400 mx-auto animate-bounce drop-shadow-lg" />
-
-                  <div>
-                    <h2 className="text-3xl font-bold text-white drop-shadow-lg">
-                      {lastStudent.first_name} {lastStudent.last_name}
-                    </h2>
-
-                    <p className="text-lg text-green-300 font-semibold mt-2 drop-shadow-lg">
-                      {lastStudent.student_number}
-                    </p>
-                  </div>
-
-                  <Alert className="bg-green-500/20 border-green-400 backdrop-blur-md text-left">
-                    <AlertDescription className="text-white font-semibold text-sm">
-                      {message}
-                      <div className="mt-3 text-base font-bold text-green-300">
-                        Next scan in {scanCountdown}s
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              )}
-
               {scanStatus === "error" && (
                 <div className="space-y-4 animate-fade-in text-center">
                   <XCircle className="h-20 w-20 text-red-400 mx-auto drop-shadow-lg" />
@@ -696,6 +564,32 @@ const Kiosk = () => {
           </div>
         </div>
       </div>
+
+      {/* Fingerprint Success Modal */}
+      {showFingerprintModal && lastStudent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-gradient-to-br from-green-900/95 to-emerald-900/95 border-2 border-green-400 rounded-3xl p-12 text-center max-w-2xl backdrop-blur-2xl shadow-2xl">
+            <CheckCircle2 className="h-28 w-28 text-green-400 mx-auto mb-8 animate-bounce drop-shadow-lg" />
+            
+            <h2 className="text-5xl font-bold text-white mb-6 drop-shadow-lg">
+              {lastStudent.first_name} {lastStudent.last_name}
+            </h2>
+            
+            <p className="text-2xl text-green-300 font-semibold mb-8 drop-shadow-lg">
+              {lastStudent.student_number}
+            </p>
+            
+            <div className="bg-green-500/20 border border-green-400 rounded-2xl p-6 mb-8">
+              <p className="text-lg text-green-100 font-semibold mb-4">
+                {message}
+              </p>
+              <p className="text-4xl font-bold text-green-300">
+                {scanCountdown}s
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Success Modal */}
       {showSuccessModal && (

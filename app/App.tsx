@@ -4,6 +4,7 @@ import StudentList from "./pages/Student";
 import Login from "./pages/Login";
 import Navbar from "./pages/Navbar";
 import { authService } from "@/services/api";
+import {FingerprintScanner} from "@/pages/FingerprintScanner";
 
 // Main Layout with Navbar
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
@@ -37,6 +38,14 @@ function App() {
 
         <div className="kiosk-mode">
           <Kiosk />
+        </div>
+      } />
+
+      {/* Fingerprint Scanner - Full screen, no navbar */}
+      <Route path="/fingerprint" element={
+
+        <div className="kiosk-mode">  
+          <FingerprintScanner />
         </div>
       } />
 
