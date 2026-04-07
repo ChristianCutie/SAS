@@ -10,6 +10,7 @@ export interface Student {
     is_active: boolean;
     email?: string;
     contact_number?: string;
+    fingerprint_id?: string | null;
 }
 
 export interface AttendanceRecord {

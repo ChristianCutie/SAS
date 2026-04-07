@@ -338,6 +338,48 @@ export const dashboardService = {
     }
 };
 
+// Fingerprint Service
+export const fingerprintService = {
+    // Get all student fingerprint templates
+    getStudentTemplates: async () => {
+        try {
+            const response = await api.get('/student-templates');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching fingerprint templates:', error);
+            throw error;
+        }
+    },
+
+    // // Verify a fingerprint sample against stored templates
+    // verifyFingerprint: async (fingerprintSample: any, studentTemplates: Array<{student_number: string; fingerprint_template: string}>) => {
+    //     try {
+    //         const response = await api.post('/verify-fingerprint', {
+    //             fingerprint_sample: fingerprintSample,
+    //             student_templates: studentTemplates
+    //         });
+    //         return response.data;
+    //     } catch (error) {
+    //         console.error('Error verifying fingerprint:', error);
+    //         throw error;
+    //     }
+    // },
+
+    // Save fingerprint template for a student
+    // saveTemplate: async (studentId: number, fingerprintTemplate: any) => {
+    //     try {
+    //         const response = await api.post('/set-fingerprint', {
+    //             student_id: studentId,
+    //             fingerprint_template: fingerprintTemplate
+    //         });
+    //         return response.data;
+    //     } catch (error) {
+    //         console.error('Error saving fingerprint template:', error);
+    //         throw error;
+    //     }
+    // }
+};
+
 // Export types that match your Laravel models
 export interface Student {
     id: number;
@@ -360,6 +402,7 @@ export interface Student {
     is_archived: boolean;
     created_at?: string;
     updated_at?: string;
+    fingerprint_id?: string | null;
 }
 
 export interface AttendanceRecord {
@@ -402,6 +445,23 @@ export interface StudentStats {
     archived_students: number;
     students_with_rfid: number;
     regular_students: number;
+}
+
+export interface FingerprintTemplate {
+    student_id: number;
+    student_number: string;
+    fingerprint_template: string;
+}
+
+export interface VerificationResponse {
+    message: string;
+    matched_student?: {
+        student_id: number;
+        student_number: string;
+        fingerprint_template: string;
+        first_name?: string;
+        last_name?: string;
+    };
 }
 
 export default api;

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFingerprint } from "@/hooks/useFingerprint";
 import { Button } from "@/components/ui/button";
-import api from "@/services/api";
+import api, { fingerprintService } from "@/services/api";
 import type { Student } from "@/services/api";
 import { CheckCircle2, XCircle, ChevronLeft, Fingerprint } from "lucide-react";
 // import { attendanceService, studentService } from "@/services/api";
@@ -23,9 +23,7 @@ const Kiosk = () => {
   const [scanStatus, setScanStatus] = useState<
     "idle" | "success" | "error" | "processing"
   >("idle");
-  const [message, setMessage] = useState(
-    "Position your finger on the scanner",
-  );
+  const [message, setMessage] = useState("Position your finger on the scanner");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [scanCountdown, setScanCountdown] = useState(3);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -35,33 +33,72 @@ const Kiosk = () => {
   >([]);
 
   const [hoverExit, setHoverExit] = useState(false);
+  const [studentTemplates, setStudentTemplates] = useState<
+    Array<{ student_number: string; fingerprint_template: string }>
+  >([]);
 
   // 🔥 FINGERPRINT INTEGRATION
-  const { state: fingerprintState, enumerateDevices, startCapture, stopCapture, clearData } = useFingerprint();
+  const {
+    state: fingerprintState,
+    enumerateDevices,
+    startCapture,
+    stopCapture,
+    clearData,
+    verifyWithBackend,
+  } = useFingerprint();
   const [fingerprintProcessing, setFingerprintProcessing] = useState(false);
 
   const navigate = useNavigate();
 
   const successSound = useRef(new Audio("/sounds/success.mp3"));
   const errorSound = useRef(new Audio("/sounds/error.mp3"));
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Fullscreen
+  // Request fullscreen on first user interaction
   useEffect(() => {
-    const el = document.documentElement;
-    el.requestFullscreen?.();
+    const handleFirstInteraction = async () => {
+      try {
+        const el = document.documentElement;
+        if (!document.fullscreenElement) {
+          await el.requestFullscreen?.();
+          setIsFullscreen(true);
+        }
+      } catch (err) {
+        console.warn("Fullscreen request failed:", err);
+      }
 
-    const reEnter = () => {
-      if (!document.fullscreenElement) el.requestFullscreen?.();
+      document.removeEventListener("click", handleFirstInteraction);
+      document.removeEventListener("touchstart", handleFirstInteraction);
     };
 
-    document.addEventListener("fullscreenchange", reEnter);
-    return () => document.removeEventListener("fullscreenchange", reEnter);
+    document.addEventListener("click", handleFirstInteraction);
+    document.addEventListener("touchstart", handleFirstInteraction);
+
+    return () => {
+      document.removeEventListener("click", handleFirstInteraction);
+      document.removeEventListener("touchstart", handleFirstInteraction);
+    };
   }, []);
 
   // Clock
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Fetch student templates on mount
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const templates = await fingerprintService.getStudentTemplates();
+        setStudentTemplates(templates);
+        console.log("Student templates loaded:", templates);
+      } catch (err) {
+        console.error("Failed to fetch student templates:", err);
+        setMessage("Failed to load fingerprint templates");
+      }
+    };
+    fetchTemplates();
   }, []);
 
   // Initialize fingerprint scanner on mount
@@ -107,114 +144,89 @@ const Kiosk = () => {
 
     if (scanStatus === "error") {
       errorSound.current.play();
+
+      // Auto clear error after 1 second
+      const errorTimer = setTimeout(() => {
+        setScanStatus("idle");
+        setMessage("Position your finger on the scanner");
+        clearData();
+        setFingerprintProcessing(false);
+      }, 1000);
+
+      return () => clearTimeout(errorTimer);
     }
   }, [scanStatus]);
 
   // 🔥 FINGERPRINT SCANNING - Auto-process when fingerprint is captured
   useEffect(() => {
-    if (fingerprintState.latestIntermediateData && !fingerprintProcessing && scanStatus === "idle") {
+    if (
+      fingerprintState.latestIntermediateData &&
+      !fingerprintProcessing &&
+      scanStatus === "idle"
+    ) {
       handleFingerprintScan();
     }
-  }, [fingerprintState.latestIntermediateData, fingerprintProcessing, scanStatus]);
+  }, [
+    fingerprintState.latestIntermediateData,
+    fingerprintProcessing,
+    scanStatus,
+  ]);
 
   // 🔥 FINGERPRINT HANDLER - Process fingerprint scan with backend API
   const handleFingerprintScan = async () => {
     if (!fingerprintState.latestIntermediateData) return;
-    
+
     try {
       setFingerprintProcessing(true);
       setScanStatus("processing");
-      setMessage("Processing fingerprint...");
+      setMessage("Identifying student...");
 
-      // 🔥 CALL BACKEND API - Save/Identify fingerprint
-      const response = await api.post("/set-fingerprint", {
-        fingerprint_id: fingerprintState.latestIntermediateData,
+      // 🔥 NEW: backend handles everything
+      const matchedStudent = await verifyWithBackend(studentTemplates);
+
+      if (!matchedStudent) {
+        throw new Error("Fingerprint not recognized");
+      }
+
+      console.log("✓ Fingerprint matched:", matchedStudent.student_number);
+      setMessage("Processing attendance...");
+
+      // 🔥 Call attendance API
+      const response = await api.post("/attendance/time-in", {
+        student_number: matchedStudent.student_number,
       });
 
-      console.log("Fingerprint API Response:", response.data);
+      const attendanceData = response.data.attendance;
 
-      // Get the fingerprint data from response
-      const fingerprintData = response.data.data;
-      
       setScanStatus("success");
-      setMessage("Fingerprint identified successfully!");
-      
-      // For now, mock student data - in production, backend would return student ID
-      // TODO: Enhance backend to return student info with fingerprint match
-      const mockStudent: Student = {
-        id: 1,
-        first_name: "John",
-        last_name: "Doe",
-        student_number: "STU-2024-001",
-        email: "john.doe@student.com",
-        rfid_tag_number: "FINGERPRINT-MODE",
-        fingerprint_id: fingerprintData.fingerprint_id,
-      };
-      
-      setLastStudent(mockStudent);
+      setMessage(response.data.message || "Time-in recorded successfully!");
 
-      // Add to attendance records
       const now = new Date();
-      const timeString = now.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-      const dateString = now.toLocaleDateString();
 
-      const newRecord: AttendanceRecord = {
-        id: fingerprintData.id || Date.now().toString(),
-        firstName: mockStudent.first_name,
-        lastName: mockStudent.last_name,
-        studentNumber: mockStudent.student_number,
-        time: timeString,
-        date: dateString,
-        status: "In",
+      const newRecord = {
+        id: attendanceData.id || Date.now().toString(),
+        firstName: matchedStudent.first_name,
+        lastName: matchedStudent.last_name,
+        studentNumber: matchedStudent.student_number,
+        time: now.toLocaleTimeString(),
+        date: now.toLocaleDateString(),
+        status: "In" as const,
       };
+
       setAttendanceRecords((prev) => [newRecord, ...prev]);
-      
-      // Clear fingerprint data and restart capture
+      setLastStudent(matchedStudent);
+
       setTimeout(() => {
         clearData();
         setFingerprintProcessing(false);
         setScanCountdown(3);
-      },);
-      
+      }, 500);
     } catch (error: any) {
       setScanStatus("error");
-      const errorMsg = error.response?.data?.message || "Fingerprint identification failed";
-      setMessage(errorMsg);
-      console.error("Fingerprint error:", error);
+      setMessage(error.message || "Fingerprint failed");
+      console.error("Fingerprint scan error:", error);
       setFingerprintProcessing(false);
     }
-  };
-
-  const handleTestClick = () => {
-    setShowSuccessModal(true);
-    const now = new Date();
-    const timeString = now.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-    const dateString = now.toLocaleDateString();
-    const status = Math.random() > 0.5 ? "In" : "Out";
-
-
-    const newRecord: AttendanceRecord = {
-      id: Date.now().toString(),
-      firstName: "John",
-      lastName: "Doe",
-      studentNumber: "STU-2024-001",
-      time: timeString,
-      date: dateString,
-      status: status,
-    };
-    setAttendanceRecords((prev) => [newRecord, ...prev]);
-
-    setTimeout(() => {
-      setShowSuccessModal(false);
-    }, 1000);
   };
 
   return (
@@ -394,7 +406,7 @@ const Kiosk = () => {
               {/* Kiosk Machine with Hand Tapping */}
               <div className="relative mb-8 flex items-center justify-center h-80">
                 {/* Animation Styles */}
-              <style>{`
+                <style>{`
                 @keyframes scanningBounce {
                   0%, 100% { transform: scale(1); }
                   50% { transform: scale(1.1); }
@@ -472,62 +484,94 @@ const Kiosk = () => {
                 }
               `}</style>
 
-              {/* Fingerprint Icon with Scanning Animation */}
-              <div className="relative flex items-center justify-center">
-                {/* Scanner Rings */}
-                <svg
-                  className="absolute w-64 h-64 pointer-events-none"
-                  viewBox="0 0 300 300"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  {/* Scanning Box Frame */}
-                  <rect
-                    x="50"
-                    y="50"
-                    width="200"
-                    height="200"
-                    fill="none"
-                    stroke="#00d9ff"
-                    strokeWidth="2"
-                    strokeDasharray="20,10"
-                    className="scan-box-border"
-                    rx="10"
-                  />
-
-                  {/* Corner Dots */}
-                  <circle cx="50" cy="50" r="8" fill="#00d9ff" className="corner-dot" opacity="0.6" />
-                  <circle cx="250" cy="50" r="8" fill="#00d9ff" className="corner-dot" opacity="0.6" style={{ animationDelay: "0.5s" }} />
-                  <circle cx="50" cy="250" r="8" fill="#00d9ff" className="corner-dot" opacity="0.6" style={{ animationDelay: "1s" }} />
-                  <circle cx="250" cy="250" r="8" fill="#00d9ff" className="corner-dot" opacity="0.6" style={{ animationDelay: "1.5s" }} />
-
+                {/* Fingerprint Icon with Scanning Animation */}
+                <div className="relative flex items-center justify-center">
                   {/* Scanner Rings */}
-                  <circle
-                    cx="150"
-                    cy="150"
-                    r="60"
-                    fill="none"
-                    stroke="#00d9ff"
-                    strokeWidth="2"
-                    className="scanner-ring"
-                    opacity="0.5"
-                  />
-                </svg>
+                  <svg
+                    className="absolute w-64 h-64 pointer-events-none"
+                    viewBox="0 0 300 300"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    {/* Scanning Box Frame */}
+                    <rect
+                      x="50"
+                      y="50"
+                      width="200"
+                      height="200"
+                      fill="none"
+                      stroke="#00d9ff"
+                      strokeWidth="2"
+                      strokeDasharray="20,10"
+                      className="scan-box-border"
+                      rx="10"
+                    />
 
-                {/* Scanning Line */}
-                <div className="absolute w-48 h-1 bg-gradient-to-b from-transparent via-cyan-400 to-transparent scanning-line" 
-                  style={{
-                    boxShadow: "0 0 15px rgba(0, 217, 255, 0.8)",
-                  }}
-                />
+                    {/* Corner Dots */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="8"
+                      fill="#00d9ff"
+                      className="corner-dot"
+                      opacity="0.6"
+                    />
+                    <circle
+                      cx="250"
+                      cy="50"
+                      r="8"
+                      fill="#00d9ff"
+                      className="corner-dot"
+                      opacity="0.6"
+                      style={{ animationDelay: "0.5s" }}
+                    />
+                    <circle
+                      cx="50"
+                      cy="250"
+                      r="8"
+                      fill="#00d9ff"
+                      className="corner-dot"
+                      opacity="0.6"
+                      style={{ animationDelay: "1s" }}
+                    />
+                    <circle
+                      cx="250"
+                      cy="250"
+                      r="8"
+                      fill="#00d9ff"
+                      className="corner-dot"
+                      opacity="0.6"
+                      style={{ animationDelay: "1.5s" }}
+                    />
 
-                {/* Fingerprint Icon */}
-                <div className="absolute">
-                  <Fingerprint 
-                    className="w-48 h-60 text-cyan-400 animate-fingerprint-scan"
-                    strokeWidth={0.5}
+                    {/* Scanner Rings */}
+                    <circle
+                      cx="150"
+                      cy="150"
+                      r="60"
+                      fill="none"
+                      stroke="#00d9ff"
+                      strokeWidth="2"
+                      className="scanner-ring"
+                      opacity="0.5"
+                    />
+                  </svg>
+
+                  {/* Scanning Line */}
+                  <div
+                    className="absolute w-48 h-1 bg-gradient-to-b from-transparent via-cyan-400 to-transparent scanning-line"
+                    style={{
+                      boxShadow: "0 0 15px rgba(0, 217, 255, 0.8)",
+                    }}
                   />
+
+                  {/* Fingerprint Icon */}
+                  <div className="absolute">
+                    <Fingerprint
+                      className="w-48 h-60 text-cyan-400 animate-fingerprint-scan"
+                      strokeWidth={0.5}
+                    />
+                  </div>
                 </div>
-              </div>
               </div>
 
               {/* STATUS */}
@@ -570,15 +614,15 @@ const Kiosk = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-gradient-to-br from-green-900/95 to-emerald-900/95 border-2 border-green-400 rounded-3xl p-12 text-center max-w-2xl backdrop-blur-2xl shadow-2xl">
             <CheckCircle2 className="h-28 w-28 text-green-400 mx-auto mb-8 animate-bounce drop-shadow-lg" />
-            
+
             <h2 className="text-5xl font-bold text-white mb-6 drop-shadow-lg">
               {lastStudent.first_name} {lastStudent.last_name}
             </h2>
-            
+
             <p className="text-2xl text-green-300 font-semibold mb-8 drop-shadow-lg">
               {lastStudent.student_number}
             </p>
-            
+
             <div className="bg-green-500/20 border border-green-400 rounded-2xl p-6 mb-8">
               <p className="text-lg text-green-100 font-semibold mb-4">
                 {message}

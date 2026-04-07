@@ -10,7 +10,8 @@ import {
     Hash,
     AlertCircle,
     CheckCircle2,
-    Radio
+    Fingerprint,
+    Camera
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { studentService, type Student } from '@/services/api';
+import { useFingerprint } from '@/hooks/useFingerprint';
 
 interface StudentFormProps {
     student?: Student | null;
@@ -29,8 +31,18 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [showFingerprintModal, setShowFingerprintModal] = useState(false);
+
+    const {
+        state: fingerprintState,
+        enumerateDevices,
+        startCapture,
+        stopCapture,
+        clearData: clearFingerprintData,
+    } = useFingerprint();
 
     const [formData, setFormData] = useState({
+        fingerprint_id: '',
         rfid_tag_number: '',
         student_number: '',
         student_status: 'Regular',
@@ -59,6 +71,7 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
                 : '';
 
             setFormData({
+                fingerprint_id: (student as any).fingerprint_id || '',
                 rfid_tag_number: student.rfid_tag_number || '',
                 student_number: student.student_number || '',
                 student_status: student.student_status || 'Regular',
@@ -78,6 +91,45 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
             });
         }
     }, [student]);
+
+    useEffect(() => {
+        if (showFingerprintModal) {
+            const initFingerprint = async () => {
+                try {
+                    await enumerateDevices();
+                    await startCapture();
+                } catch (err) {
+                    console.error("Failed to initialize fingerprint scanner:", err);
+                }
+            };
+            initFingerprint();
+
+            return () => {
+                stopCapture().catch(() => {});
+            };
+        }
+    }, [showFingerprintModal, enumerateDevices, startCapture, stopCapture]);
+
+    // Auto-confirm fingerprint when captured
+    useEffect(() => {
+        if (
+            showFingerprintModal &&
+            fingerprintState.latestIntermediateData &&
+            !formData.fingerprint_id
+        ) {
+            setFormData(prev => ({
+                ...prev,
+                fingerprint_id: fingerprintState.latestIntermediateData!
+            }));
+            
+            // Auto close modal after a brief delay to show success
+            setTimeout(() => {
+                setShowFingerprintModal(false);
+                stopCapture();
+                clearFingerprintData();
+            }, 1500);
+        }
+    }, [showFingerprintModal, fingerprintState.latestIntermediateData, formData.fingerprint_id]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -109,7 +161,7 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
         const newErrors: Record<string, string> = {};
 
         // Required fields validation
-        if (!formData.rfid_tag_number.trim()) newErrors.rfid_tag_number = 'RFID Tag Number is required for attendance scanning';
+        if (!formData.fingerprint_id.trim()) newErrors.fingerprint_id = 'Fingerprint ID is required for attendance scanning';
         if (!formData.first_name.trim()) newErrors.first_name = 'First name is required';
         if (!formData.last_name.trim()) newErrors.last_name = 'Last name is required';
         if (!formData.student_number.trim()) newErrors.student_number = 'Student number is required';
@@ -235,39 +287,50 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
                             </Alert>
                         )}
 
-                        {/* RFID Section - MOVED TO TOP */}
+                        {/* Fingerprint Section - MOVED TO TOP */}
                         <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                                <Radio className="w-5 h-5 text-blue-600" />
-                                RFID Information
+                                <Fingerprint className="w-5 h-5 text-blue-600" />
+                                Fingerprint Information
                             </h3>
 
                             <div className="grid grid-cols-1 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="rfid_tag_number" className="text-slate-700 font-semibold">
-                                        RFID Tag Number *
+                                    <Label htmlFor="fingerprint_id" className="text-slate-700 font-semibold">
+                                        Fingerprint ID *
                                         <span className="ml-2 text-xs font-normal text-blue-600 bg-blue-50 px-2 py-1 rounded">
                                             Required for attendance scanning
                                         </span>
                                     </Label>
-                                    <div className="relative">
-                                        <Radio className="absolute left-3 top-3 h-4 w-4 text-blue-500" />
-                                        <Input
-                                            id="rfid_tag_number"
-                                            name="rfid_tag_number"
-                                            value={formData.rfid_tag_number}
-                                            onChange={handleChange}
-                                            placeholder="e.g., 1234567890 (Scan RFID card or enter manually)"
-                                            className="pl-10 border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                                    <div className="space-y-3">
+                                        <Button
+                                            type="button"
+                                            onClick={() => setShowFingerprintModal(true)}
                                             disabled={loading}
-                                        />
+                                            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+                                        >
+                                            <Camera className="w-4 h-4 mr-2" />
+                                            Capture Fingerprint
+                                        </Button>
+                                        
+                                        {formData.fingerprint_id && (
+                                            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                                                <p className="text-sm font-medium text-emerald-800 mb-2">
+                                                    ✓ Fingerprint captured successfully
+                                                </p>
+                                                <p className="text-xs text-emerald-700 break-all">
+                                                    {formData.fingerprint_id.substring(0, 50)}...
+                                                </p>
+                                            </div>
+                                        )}
+                                        
+                                        {errors.fingerprint_id && (
+                                            <p className="text-sm text-red-600">{errors.fingerprint_id}</p>
+                                        )}
                                     </div>
                                     <div className="text-sm text-slate-500 mt-1">
-                                        This unique RFID number is essential for the student to scan attendance in kiosk mode.
+                                        This unique fingerprint is essential for the student to scan attendance in kiosk mode.
                                     </div>
-                                    {errors.rfid_tag_number && (
-                                        <p className="text-sm text-red-600 mt-1">{errors.rfid_tag_number}</p>
-                                    )}
                                 </div>
                             </div>
                         </div>
@@ -616,6 +679,140 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
                             </div>
                         </div>
                     </CardContent>
+
+                    {/* Fingerprint Modal */}
+                    {showFingerprintModal && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <Card className="w-full max-w-2xl border-slate-200 shadow-2xl">
+                                <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-blue-50 to-purple-50">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg">
+                                                <Fingerprint className="w-5 h-5 text-white" />
+                                            </div>
+                                            <div>
+                                                <CardTitle className="text-xl font-bold text-slate-900">
+                                                    Capture Fingerprint
+                                                </CardTitle>
+                                                <p className="text-slate-600 text-sm">
+                                                    Place your finger on the scanner below
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => {
+                                                setShowFingerprintModal(false);
+                                                stopCapture();
+                                                clearFingerprintData();
+                                            }}
+                                            className="hover:bg-slate-200"
+                                        >
+                                            <X className="w-5 h-5" />
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+
+                                <CardContent className="p-6 space-y-6">
+                                    {/* Error Messages */}
+                                    {fingerprintState.error && (
+                                        <Alert variant="destructive">
+                                            <AlertCircle className="h-4 w-4" />
+                                            <AlertDescription>{fingerprintState.error}</AlertDescription>
+                                        </Alert>
+                                    )}
+
+                                    {/* Device Status */}
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                                <p className="text-sm font-medium text-slate-600 mb-1">Device Status</p>
+                                                <div className="flex items-center gap-2">
+                                                    <div
+                                                        className={`w-3 h-3 rounded-full ${
+                                                            fingerprintState.isConnected ? "bg-green-500" : "bg-red-500"
+                                                        }`}
+                                                    />
+                                                    <span className="font-semibold text-slate-900">
+                                                        {fingerprintState.isConnected ? "Connected" : "Disconnected"}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                                <p className="text-sm font-medium text-slate-600 mb-1">Quality</p>
+                                                <p className="font-semibold text-slate-900">
+                                                    {fingerprintState.quality || "N/A"}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Fingerprint Image Display */}
+                                    {fingerprintState.latestImageSrc && (
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-medium text-slate-700">Captured Fingerprint</p>
+                                            <div className="bg-slate-100 rounded-lg p-4 flex items-center justify-center min-h-[300px]">
+                                                <img
+                                                    src={fingerprintState.latestImageSrc}
+                                                    alt="Captured Fingerprint"
+                                                    className="max-h-[300px] max-w-full rounded"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!fingerprintState.latestImageSrc && (
+                                        <div className="bg-slate-100 rounded-lg p-8 flex flex-col items-center justify-center min-h-[300px] text-center">
+                                            <Fingerprint className="w-12 h-12 text-slate-400 mb-3" />
+                                            <p className="text-slate-600 font-medium">
+                                                {fingerprintState.isConnected
+                                                    ? "Ready to capture fingerprint"
+                                                    : "Waiting for device connection"}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Button Actions */}
+                                    {!fingerprintState.acquisitionStarted ? (
+                                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                                            <p className="text-sm text-slate-600">
+                                                <span className="inline-block animate-spin mr-2">🔄</span>
+                                                Initializing fingerprint scanner...
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                                            <p className="text-sm font-medium text-emerald-800">
+                                                ✓ Scanner ready - Position your finger
+                                            </p>
+                                        </div>
+                                    )}
+                                </CardContent>
+
+                                <CardFooter className="border-t border-slate-100 p-6 flex justify-between gap-3">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => {
+                                            setShowFingerprintModal(false);
+                                            stopCapture();
+                                            clearFingerprintData();
+                                        }}
+                                        className="border-slate-300 hover:bg-slate-100"
+                                    >
+                                        Close
+                                    </Button>
+                                    {fingerprintState.latestIntermediateData && (
+                                        <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 px-4 py-2 rounded-lg">
+                                            <CheckCircle2 className="w-4 h-4" />
+                                            <span className="text-sm font-medium">Fingerprint captured successfully</span>
+                                        </div>
+                                    )}
+                                </CardFooter>
+                            </Card>
+                        </div>
+                    )}
 
                     <CardFooter className="border-t border-slate-100 p-6 flex justify-between">
                         <Button
