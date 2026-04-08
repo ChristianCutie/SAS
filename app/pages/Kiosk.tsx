@@ -30,6 +30,8 @@ const Kiosk = () => {
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [currentDate, setCurrentDate] = useState<string>("");
   const [currentTime, setCurrentTime] = useState<string>("");
+  const [showCheckoutWarningModal, setShowCheckoutWarningModal] = useState(false);
+  const [checkoutWarningMessage, setCheckoutWarningMessage] = useState("");
 
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,6 +102,24 @@ const Kiosk = () => {
     audio.play().catch(() => {});
   };
 
+  const isWithin5MinutesOfCheckout = (timeIn: string): boolean => {
+    if (!timeIn) return false;
+    
+    const now = new Date();
+    const inTime = new Date(timeIn.replace(" ", "T"));
+    
+    // Calculate time difference in minutes
+    const diffInMinutes = (now.getTime() - inTime.getTime()) / (1000 * 60);
+    
+    // Check if within 5 minutes before checkout
+    // Assuming 8-hour session or customize checkout time as needed
+    const CHECKOUT_THRESHOLD_MINUTES = 5; // 5 minutes warning before checkout
+    
+    // Example scenario: warn if within 5 minutes of a standard checkout time
+    // Adjust this logic based on your actual checkout time rules
+    return diffInMinutes > 0 && diffInMinutes < CHECKOUT_THRESHOLD_MINUTES;
+  };
+
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rfid.trim()) return;
@@ -134,16 +154,36 @@ const Kiosk = () => {
 
         if (studentData) {
           setScannedStudent(studentData);
-          setShowScannedModal(true);
+          
+          // Check if student is within 5 minutes of checkout
+          if (isWithin5MinutesOfCheckout(studentData.time_in)) {
+            setCheckoutWarningMessage(
+              `${studentData.first_name} ${studentData.last_name} is approaching checkout time. Please ensure proper exit procedures.`,
+            );
+            setShowCheckoutWarningModal(true);
+
+            if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+            modalTimeoutRef.current = setTimeout(() => {
+              setShowCheckoutWarningModal(false);
+              setShowScannedModal(true);
+              
+              if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+              modalTimeoutRef.current = setTimeout(() => {
+                setShowScannedModal(false);
+                inputRef.current?.focus();
+              }, 3000);
+            }, 3000);
+          } else {
+            setShowScannedModal(true);
+
+            if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+            modalTimeoutRef.current = setTimeout(() => {
+              setShowScannedModal(false);
+              inputRef.current?.focus();
+            }, 3000);
+          }
 
           await loadRecentRecords();
-
-          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
-          modalTimeoutRef.current = setTimeout(() => {
-            setShowScannedModal(false);
-            inputRef.current?.focus();
-          }, 3000);
-        }
       } else {
         playSound("error");
         const errorMessage = result?.message || "Student not registered";
@@ -156,6 +196,7 @@ const Kiosk = () => {
           inputRef.current?.focus();
         }, 3000);
       }
+    }
     } catch (error) {
       playSound("error");
       const errorMessage =
@@ -170,6 +211,7 @@ const Kiosk = () => {
         inputRef.current?.focus();
       }, 3000);
     }
+    
   };
 
   const formatTimeIn = (time: string | null) => {
@@ -385,6 +427,56 @@ const Kiosk = () => {
                 </svg>
                 <span className="text-lg font-semibold">
                   Please contact the administrator
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CHECKOUT WARNING MODAL */}
+      {showCheckoutWarningModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-white/10 p-12 rounded-3xl text-center shadow-2xl scale-in animate-in duration-300 max-w-md">
+            <div className="mb-6 relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-full blur-2xl"></div>
+              <div className="flex items-center justify-center w-32 h-32 rounded-full mx-auto relative border-2 border-yellow-400/50 bg-yellow-500/10">
+                <svg
+                  className="w-16 h-16 text-yellow-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-white mb-4">
+              ⚠️ Checkout Warning
+            </h2>
+            <div className="flex flex-col items-center gap-4 mb-6">
+              <p className="text-lg text-yellow-300 font-semibold">
+                {checkoutWarningMessage}
+              </p>
+              <div className="flex items-center gap-2 text-white bg-yellow-500/10 border border-yellow-400/30 rounded-lg px-4 py-3">
+                <svg
+                  className="w-5 h-5 text-yellow-400 flex-shrink-0"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18.243 1.757a6 6 0 000 8.486L9.243 19.243a6 6 0 11-8.486-8.486l8.486-8.486a6 6 0 018.486 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span className="text-sm">
+                  Proceeding with check-in in 5 seconds...
                 </span>
               </div>
             </div>
