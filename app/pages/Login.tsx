@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ScanLine, User, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { ScanLine, User, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,7 @@ const Login = () => {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState(false);
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -23,16 +24,12 @@ const Login = () => {
 
         try {
             await authService.login(email, password);
-            alert("sucess")
-            navigate('/dashboard');
+            setSuccess(true);
+            setTimeout(() => navigate('/dashboard'), 1500);
         } catch (err: any) {
-            if (err.response?.status === 401) {
-                setError('Invalid email or password');
-            } else if (err.response?.data?.message) {
-                setError(err.response.data.message);
-            } else {
-                setError('An error occurred. Please try again.');
-            }
+            if (err.response?.status === 401) setError('Invalid email or password');
+            else if (err.response?.data?.message) setError(err.response.data.message);
+            else setError('An error occurred. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -59,7 +56,17 @@ const Login = () => {
                     <CardDescription className="text-gray-600">
                         Enter your credentials to access the dashboard
                     </CardDescription>
+
+                    {success && (
+                        <Alert className="mb-4 bg-green-50 border-green-200">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <AlertDescription className="text-green-800">
+                                Login successful! Redirecting to dashboard...
+                            </AlertDescription>
+                        </Alert>
+                    )}
                 </CardHeader>
+
                 <CardContent>
                     {error && (
                         <Alert variant="destructive" className="mb-4">
@@ -70,7 +77,7 @@ const Login = () => {
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="email" className="text-gray-700">Username </Label>
+                            <Label htmlFor="email" className="text-gray-700">Username</Label>
                             <div className="relative">
                                 <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                                 <Input
@@ -89,10 +96,7 @@ const Login = () => {
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="password" className="text-gray-700">Password</Label>
-                                <Link
-                                    to="/forgot-password"
-                                    className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors"
-                                >
+                                <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors">
                                     Forgot password?
                                 </Link>
                             </div>
@@ -138,22 +142,22 @@ const Login = () => {
             </Card>
 
             <style>{`
-        @keyframes blob {
-          0% { transform: translate(0px, 0px) scale(1); }
-          33% { transform: translate(30px, -50px) scale(1.1); }
-          66% { transform: translate(-20px, 20px) scale(0.9); }
-          100% { transform: translate(0px, 0px) scale(1); }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
+                @keyframes blob {
+                  0% { transform: translate(0px, 0px) scale(1); }
+                  33% { transform: translate(30px, -50px) scale(1.1); }
+                  66% { transform: translate(-20px, 20px) scale(0.9); }
+                  100% { transform: translate(0px, 0px) scale(1); }
+                }
+                .animate-blob {
+                  animation: blob 7s infinite;
+                }
+                .animation-delay-2000 {
+                  animation-delay: 2s;
+                }
+                .animation-delay-4000 {
+                  animation-delay: 4s;
+                }
+            `}</style>
         </div>
     );
 };

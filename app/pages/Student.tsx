@@ -52,9 +52,19 @@ const StudentList = () => {
         try {
             setLoading(true);
             const data = await studentService.getAllStudents(showArchived);
-            setStudents(data);
+            // Ensure data is always an array - handle API response format
+            if (Array.isArray(data)) {
+                setStudents(data);
+            } else if (data?.students && Array.isArray(data.students)) {
+                setStudents(data.students);
+            } else if (data?.data && Array.isArray(data.data)) {
+                setStudents(data.data);
+            } else {
+                setStudents([]);
+            }
         } catch (error) {
             console.error('Failed to load students:', error);
+            setStudents([]);
         } finally {
             setLoading(false);
         }

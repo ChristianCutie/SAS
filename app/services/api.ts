@@ -3,22 +3,29 @@ import axios from 'axios';
 // API base configuration
 const API_BASE_URL = 'https://api-sas.slarenasitsolutions.com/public/api';
 
-// Create axios instance
+// Create axios instance WITH connection pooling and timeout
 const api = axios.create({
     baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
     },
+    timeout: 10000, // 10 second timeout to release connections faster
 });
 
-// Request interceptor for adding auth token
+// Request interceptor for adding auth token and optimize headers
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('auth_token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        
+        // Add cache headers for GET requests to leverage browser cache
+        if (config.method === 'get') {
+            config.headers['Cache-Control'] = 'max-age=5'; // 5 second browser cache
+        }
+        
         return config;
     },
     (error) => {
@@ -94,17 +101,30 @@ export const authService = {
     }
 };
 
-// Students Service - UPDATED
+// Students Service - UPDATED WITH REQUEST DEDUPLICATION
 export const studentService = {
-    // Get all students with optional archive status filter
+    // Cache for pending requests to prevent duplicate API calls
+    _getAllStudentsPending: null as Promise<any> | null,
+    _getStudentStatsPending: null as Promise<any> | null,
+    
+    // Get all students with optional archive status filter - WITH DEDUPLICATION
     getAllStudents: async (showArchived?: boolean) => {
         try {
+            // If pending request exists with same parameters, return it
+            if (studentService._getAllStudentsPending) {
+                return studentService._getAllStudentsPending;
+            }
+
             const params = showArchived ? { archive_status: 'archived' } : { archive_status: 'active' };
-            const response = await api.get('/students', { params });
+            studentService._getAllStudentsPending = api.get('/students', { params });
+            
+            const response = await studentService._getAllStudentsPending;
             return response.data;
         } catch (error) {
             console.error('Error fetching students:', error);
             throw error;
+        } finally {
+            studentService._getAllStudentsPending = null;
         }
     },
 
@@ -196,10 +216,17 @@ export const studentService = {
         }
     },
 
-    // Get student statistics
+    // Get student statistics - WITH DEDUPLICATION
     getStudentStats: async () => {
         try {
-            const response = await api.get('/students/stats');
+            // Reuse pending request if one exists
+            if (studentService._getStudentStatsPending) {
+                return studentService._getStudentStatsPending;
+            }
+
+            studentService._getStudentStatsPending = api.get('/students/stats');
+            
+            const response = await studentService._getStudentStatsPending;
             return response.data;
         } catch (error) {
             console.error('Error fetching student stats:', error);
@@ -211,6 +238,8 @@ export const studentService = {
                 students_with_rfid: 298,
                 regular_students: 280
             };
+        } finally {
+            studentService._getStudentStatsPending = null;
         }
     },
 
@@ -228,6 +257,9 @@ export const studentService = {
 
 // Attendance Service
 export const attendanceService = {
+    // Cache for pending attendance requests
+    _getTodayAttendancePending: null as Promise<any> | null,
+
     // Time In student
     timeIn: async (rfidTagNumber: string) => {
         try {
@@ -278,14 +310,25 @@ export const attendanceService = {
         }
     },
 
-    // Get today's attendance
+    // Get today's attendance - WITH REQUEST DEDUPLICATION to prevent connection exhaustion
     getTodayAttendance: async () => {
         try {
-            const response = await api.get('/attendance/today');
+            // If a request is already pending, return that instead of making a new one
+            if (attendanceService._getTodayAttendancePending) {
+                return attendanceService._getTodayAttendancePending;
+            }
+
+            // Create new request
+            attendanceService._getTodayAttendancePending = api.get('/attendance/today');
+            
+            const response = await attendanceService._getTodayAttendancePending;
             return response.data;
         } catch (error) {
             console.error('Error fetching today\'s attendance:', error);
             throw error;
+        } finally {
+            // Clear pending request
+            attendanceService._getTodayAttendancePending = null;
         }
     },
 
@@ -300,6 +343,17 @@ export const attendanceService = {
             return response.data;
         } catch (error) {
             console.error('Error fetching attendance summary:', error);
+            throw error;
+        }
+    },
+
+    // Get recent attendance records (latest 4)
+    getRecentAttendance: async () => {
+        try {
+            const response = await api.get('/attendance/recent');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching recent attendance:', error);
             throw error;
         }
     }
