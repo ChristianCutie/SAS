@@ -434,6 +434,20 @@ export const fingerprintService = {
     // }
 };
 
+// Announcement Service
+export const announcementService = {
+    // Get all announcements
+    getAnnouncements: async () => {
+        try {
+            const response = await api.get('/announcements');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching announcements:', error);
+            throw error;
+        }
+    }
+};
+
 // Export types that match your Laravel models
 export interface Student {
     id: number;

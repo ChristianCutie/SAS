@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
-import { attendanceService } from "@/services/api";
+import { attendanceService, announcementService } from "@/services/api";
 import "@/css/global.css";
 
 interface ScannedStudent {
@@ -30,8 +30,8 @@ const Kiosk = () => {
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [currentDate, setCurrentDate] = useState<string>("");
   const [currentTime, setCurrentTime] = useState<string>("");
-  const [showCheckoutWarningModal, setShowCheckoutWarningModal] = useState(false);
-  const [checkoutWarningMessage, setCheckoutWarningMessage] = useState("");
+  const [announcements, setAnnouncements] = useState<string[]>([]);
+  const [approachingMessage, setApproachingMessage] = useState("");
 
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +41,7 @@ const Kiosk = () => {
     inputRef.current?.focus();
     updateDateTime();
     loadRecentRecords();
+    loadAnnouncements();
 
     const interval = setInterval(() => {
       updateDateTime();
@@ -95,29 +96,29 @@ const Kiosk = () => {
     }
   };
 
+  const loadAnnouncements = async () => {
+    try {
+      const response = await announcementService.getAnnouncements();
+
+      if (Array.isArray(response)) {
+        const announcementTexts = response
+          .map(
+            (announcement: any) =>
+              announcement.title || announcement.content || "",
+          )
+          .filter((text: string) => text.trim() !== "");
+        setAnnouncements(announcementTexts);
+      }
+    } catch (error) {
+      console.error("Error loading announcements:", error);
+    }
+  };
+
   const playSound = (type: "success" | "error") => {
     const audio = new Audio(
       type === "success" ? "/sounds/success.mp3" : "/sounds/error.mp3",
     );
     audio.play().catch(() => {});
-  };
-
-  const isWithin5MinutesOfCheckout = (timeIn: string): boolean => {
-    if (!timeIn) return false;
-    
-    const now = new Date();
-    const inTime = new Date(timeIn.replace(" ", "T"));
-    
-    // Calculate time difference in minutes
-    const diffInMinutes = (now.getTime() - inTime.getTime()) / (1000 * 60);
-    
-    // Check if within 5 minutes before checkout
-    // Assuming 8-hour session or customize checkout time as needed
-    const CHECKOUT_THRESHOLD_MINUTES = 5; // 5 minutes warning before checkout
-    
-    // Example scenario: warn if within 5 minutes of a standard checkout time
-    // Adjust this logic based on your actual checkout time rules
-    return diffInMinutes > 0 && diffInMinutes < CHECKOUT_THRESHOLD_MINUTES;
   };
 
   const handleScan = async (e: React.FormEvent) => {
@@ -138,6 +139,13 @@ const Kiosk = () => {
         const attendance = result.attendance;
 
         let studentData: ScannedStudent | null = null;
+
+        if (result?.message && result.message.toLowerCase().includes("5")) {
+          setApproachingMessage(result.message);
+        } else {
+          setApproachingMessage("");
+        }
+
         if (result.student) {
           studentData = {
             first_name: result.student.first_name || "",
@@ -154,36 +162,19 @@ const Kiosk = () => {
 
         if (studentData) {
           setScannedStudent(studentData);
-          
+
           // Check if student is within 5 minutes of checkout
-          if (isWithin5MinutesOfCheckout(studentData.time_in)) {
-            setCheckoutWarningMessage(
-              `${studentData.first_name} ${studentData.last_name} is approaching checkout time. Please ensure proper exit procedures.`,
-            );
-            setShowCheckoutWarningModal(true);
 
-            if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
-            modalTimeoutRef.current = setTimeout(() => {
-              setShowCheckoutWarningModal(false);
-              setShowScannedModal(true);
-              
-              if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
-              modalTimeoutRef.current = setTimeout(() => {
-                setShowScannedModal(false);
-                inputRef.current?.focus();
-              }, 3000);
-            }, 3000);
-          } else {
-            setShowScannedModal(true);
+          setShowScannedModal(true);
 
-            if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
-            modalTimeoutRef.current = setTimeout(() => {
-              setShowScannedModal(false);
-              inputRef.current?.focus();
-            }, 3000);
-          }
+          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+          modalTimeoutRef.current = setTimeout(() => {
+            setShowScannedModal(false);
+            inputRef.current?.focus();
+          }, 3000);
+        }
 
-          await loadRecentRecords();
+        await loadRecentRecords();
       } else {
         playSound("error");
         const errorMessage = result?.message || "Student not registered";
@@ -196,7 +187,6 @@ const Kiosk = () => {
           inputRef.current?.focus();
         }, 3000);
       }
-    }
     } catch (error) {
       playSound("error");
       const errorMessage =
@@ -211,7 +201,6 @@ const Kiosk = () => {
         inputRef.current?.focus();
       }, 3000);
     }
-    
   };
 
   const formatTimeIn = (time: string | null) => {
@@ -336,53 +325,44 @@ const Kiosk = () => {
       <div className="w-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-md text-white py-6 overflow-hidden mt-6 rounded-2xl border border-white/10 shadow-2xl relative z-10">
         <div className="flex gap-16">
           <div className="marquee text-lg font-semibold text-white/90">
-            📢 Announcement: Welcome to the School Attendance System • Please
-            tap your RFID properly • Keep your ID visible at all times • Have a
-            great day!
+            {announcements.length > 0
+              ? announcements.map((announcement, index) => (
+                  <span key={index}>📢 Announcement: {announcement} • </span>
+                ))
+              : "📢 Announcement: Welcome to the School Attendance System • Please tap your RFID properly • Keep your ID visible at all times • Have a great day!"}
           </div>
           <div className="marquee text-lg font-semibold text-white/90">
-            📢 Announcement: Welcome to the School Attendance System • Please
-            tap your RFID properly • Keep your ID visible at all times • Have a
-            great day!
+            {announcements.length > 0
+              ? announcements.map((announcement, index) => (
+                  <span key={index}>📢 Announcement: {announcement} • </span>
+                ))
+              : "📢 Announcement: Welcome to the School Attendance System • Please tap your RFID properly • Keep your ID visible at all times • Have a great day!"}
           </div>
         </div>
       </div>
 
       {/* MODAL */}
       {showScannedModal && scannedStudent && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-white/10 p-12 rounded-3xl text-center shadow-2xl scale-in animate-in duration-300">
-            <div className="mb-6 relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full blur-2xl"></div>
-              <img
-                src={`https://ui-avatars.com/api/?name=${scannedStudent.first_name}+${scannedStudent.last_name}&background=22c55e&color=fff`}
-                className="w-32 h-32 rounded-full mx-auto relative border-2 border-green-400/50"
-              />
-            </div>
-            <h2 className="text-4xl font-bold text-white mb-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-900 p-10 rounded-3xl text-center">
+            <h2 className="text-3xl text-white mb-2">
               {scannedStudent.first_name} {scannedStudent.last_name}
             </h2>
-            <div className="flex flex-col items-center gap-3 mb-4">
-              <p className="text-2xl font-bold text-green-400">
-                {formatTimeIn(scannedStudent.time_in)}
-              </p>
-              <div className="flex items-center gap-2 text-white">
-                <svg
-                  className="w-5 h-5 text-green-400"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span className="text-lg font-semibold">
-                  Attendance Recorded
-                </span>
+
+            <p className="text-green-400 text-xl mb-2">
+              {formatTimeIn(scannedStudent.time_in)}
+            </p>
+
+            <p className="text-white font-semibold">Attendance Recorded</p>
+
+            {/* ✅ 5 MINUTES APPROACHING MESSAGE */}
+            {approachingMessage && (
+              <div className="mt-4 px-4 py-2 bg-yellow-500/20 border border-yellow-400 rounded-xl">
+                <p className="text-yellow-300 font-semibold">
+                  ⚠ {approachingMessage}
+                </p>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -427,56 +407,6 @@ const Kiosk = () => {
                 </svg>
                 <span className="text-lg font-semibold">
                   Please contact the administrator
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CHECKOUT WARNING MODAL */}
-      {showCheckoutWarningModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-white/10 p-12 rounded-3xl text-center shadow-2xl scale-in animate-in duration-300 max-w-md">
-            <div className="mb-6 relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-full blur-2xl"></div>
-              <div className="flex items-center justify-center w-32 h-32 rounded-full mx-auto relative border-2 border-yellow-400/50 bg-yellow-500/10">
-                <svg
-                  className="w-16 h-16 text-yellow-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-            </div>
-            <h2 className="text-3xl font-bold text-white mb-4">
-              ⚠️ Checkout Warning
-            </h2>
-            <div className="flex flex-col items-center gap-4 mb-6">
-              <p className="text-lg text-yellow-300 font-semibold">
-                {checkoutWarningMessage}
-              </p>
-              <div className="flex items-center gap-2 text-white bg-yellow-500/10 border border-yellow-400/30 rounded-lg px-4 py-3">
-                <svg
-                  className="w-5 h-5 text-yellow-400 flex-shrink-0"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M18.243 1.757a6 6 0 000 8.486L9.243 19.243a6 6 0 11-8.486-8.486l8.486-8.486a6 6 0 018.486 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span className="text-sm">
-                  Proceeding with check-in in 5 seconds...
                 </span>
               </div>
             </div>

@@ -8,7 +8,8 @@ import {
     Users,
     LogOut,
     ScanLine,
-    ChevronDown
+    ChevronDown,
+    Megaphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,6 +32,7 @@ const Navbar = () => {
         { name: 'Dashboard', href: '/dashboard', icon: Home },
         { name: 'Kiosk', href: '/kiosk', icon: ScanLine },
         { name: 'Students', href: '/students', icon: Users },
+        { name: 'Announcements', href: '/announcements', icon: Megaphone },
     ];
 
     const handleLogout = async () => {
