@@ -32,6 +32,7 @@ const Kiosk = () => {
   const [currentTime, setCurrentTime] = useState<string>("");
   const [announcements, setAnnouncements] = useState<string[]>([]);
   const [approachingMessage, setApproachingMessage] = useState("");
+  const [errorTitle, setErrorTitle] = useState("Not Registered");
 
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -178,6 +179,12 @@ const Kiosk = () => {
       } else {
         playSound("error");
         const errorMessage = result?.message || "Student not registered";
+
+        if (errorMessage.toLowerCase().includes("already timed in and out")) {
+          setErrorTitle("Attendance Completed");
+        } else {
+          setErrorTitle("Not Registered");
+        }
         setNotRegisteredMessage(errorMessage);
         setShowNotRegisteredModal(true);
 
@@ -324,7 +331,7 @@ const Kiosk = () => {
       {/* ANNOUNCEMENT BAR */}
       <div className="w-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-md text-white py-6 overflow-hidden mt-6 rounded-2xl border border-white/10 shadow-2xl relative z-10">
         <div className="flex gap-16">
-          <div className="marquee text-lg font-semibold text-white/90">
+          <div className="marquee text-xl font-semibold text-white/90">
             {announcements.length > 0
               ? announcements.map((announcement, index) => (
                   <span key={index}>📢 Announcement: {announcement} • </span>
@@ -389,9 +396,10 @@ const Kiosk = () => {
                 </svg>
               </div>
             </div>
-            <h2 className="text-4xl font-bold text-white mb-4">
-              Not Registered
-            </h2>
+            <h2 className="text-4xl font-bold text-white mb-4">{errorTitle}</h2>
+            <p className="text-red-300 text-lg mb-4 font-semibold">
+              {notRegisteredMessage}
+            </p>
             <div className="flex flex-col items-center gap-3 mb-4">
               <div className="flex items-center gap-2 text-white">
                 <svg
