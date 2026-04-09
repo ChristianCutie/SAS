@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { utils, writeFile } from 'xlsx';
+import { attendanceService } from '@/services/api';
 import {
     Table,
     TableBody,
@@ -66,55 +67,18 @@ const AttendanceList = () => {
 
     useEffect(() => {
         loadAttendanceRecords();
-        loadStats();
     }, []);
+
+    useEffect(() => {
+        loadStats();
+    }, [attendanceRecords]);
 
     const loadAttendanceRecords = async () => {
         try {
             setLoading(true);
-            // Mock data - replace with actual API call
-            const mockData: AttendanceRecord[] = [
-                {
-                    id: 1,
-                    student_id: 1,
-                    first_name: 'John',
-                    last_name: 'Doe',
-                    student_number: 'STU001',
-                    course_name: 'BS Computer Science',
-                    attendance_date: '2026-04-10',
-                    check_in_time: '08:30:00',
-                    check_out_time: '17:00:00',
-                    status: 'present',
-                    remarks: null
-                },
-                {
-                    id: 2,
-                    student_id: 2,
-                    first_name: 'Jane',
-                    last_name: 'Smith',
-                    student_number: 'STU002',
-                    course_name: 'BS Information Technology',
-                    attendance_date: '2026-04-10',
-                    check_in_time: '09:15:00',
-                    check_out_time: null,
-                    status: 'late',
-                    remarks: 'Traffic congestion'
-                },
-                {
-                    id: 3,
-                    student_id: 3,
-                    first_name: 'Michael',
-                    last_name: 'Johnson',
-                    student_number: 'STU003',
-                    course_name: 'BS Computer Science',
-                    attendance_date: '2026-04-10',
-                    check_in_time: '',
-                    check_out_time: null,
-                    status: 'absent',
-                    remarks: 'Sick'
-                }
-            ];
-            setAttendanceRecords(mockData);
+            // Fetch attendance records from backend API
+            const data = await attendanceService.getAttendances();
+            setAttendanceRecords(data);
         } catch (error) {
             console.error('Failed to load attendance records:', error);
             setAttendanceRecords([]);
@@ -125,32 +89,39 @@ const AttendanceList = () => {
 
     const loadStats = async () => {
         try {
-            // Mock stats - replace with actual API call
-            setStats({
-                total_records: 100,
-                present_count: 78,
-                absent_count: 12,
-                late_count: 8,
-                excused_count: 2
-            });
+            // Calculate stats from attendance records
+            if (attendanceRecords.length > 0) {
+                const present_count = attendanceRecords.filter(r => r.status === 'present').length;
+                const absent_count = attendanceRecords.filter(r => r.status === 'absent').length;
+                const late_count = attendanceRecords.filter(r => r.status === 'late').length;
+                const excused_count = attendanceRecords.filter(r => r.status === 'excused').length;
+                
+                setStats({
+                    total_records: attendanceRecords.length,
+                    present_count,
+                    absent_count,
+                    late_count,
+                    excused_count
+                });
+            }
         } catch (error) {
             console.error('Failed to load stats:', error);
         }
     };
 
-    const handleDelete = async (id: number) => {
-        if (window.confirm('Are you sure you want to delete this attendance record?')) {
-            try {
-                // API call to delete record
-                alert('Record deleted successfully');
-                loadAttendanceRecords();
-                loadStats();
-            } catch (error) {
-                alert('Failed to delete record');
-                console.error('Delete error:', error);
-            }
-        }
-    };
+    // const handleDelete = async (id: number) => {
+    //     if (window.confirm('Are you sure you want to delete this attendance record?')) {
+    //         try {
+    //             await attendanceService.deleteAttendance(id);
+    //             alert('Record deleted successfully');
+    //             loadAttendanceRecords();
+    //             loadStats();
+    //         } catch (error) {
+    //             alert('Failed to delete record');
+    //             console.error('Delete error:', error);
+    //         }
+    //     }
+    // };
 
     const exportToExcel = () => {
         if (filteredRecords.length === 0) {
@@ -198,10 +169,10 @@ const AttendanceList = () => {
     // Filter records based on search term, status, and date range
     const filteredRecords = attendanceRecords.filter(record => {
         const matchesSearch =
-            record.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            record.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            record.student_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            record.course_name.toLowerCase().includes(searchTerm.toLowerCase());
+            (record.first_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (record.last_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (record.student_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (record.course_name || '').toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesStatus = filterStatus === 'all' || record.status === filterStatus;
 
@@ -508,7 +479,7 @@ const AttendanceList = () => {
                                                         variant="outline"
                                                         size="sm"
                                                         className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                                                        onClick={() => handleDelete(record.id)}
+                                                        
                                                         title="Delete record"
                                                     >
                                                         <Trash2 className="h-4 w-4" />

@@ -356,6 +356,17 @@ export const attendanceService = {
             console.error('Error fetching recent attendance:', error);
             throw error;
         }
+    },
+
+    // Get all attendance records
+    getAttendances: async () => {
+        try {
+            const response = await api.get('/attendance');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching all attendance records:', error);
+            throw error;
+        }
     }
 };
 

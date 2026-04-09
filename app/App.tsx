@@ -6,7 +6,8 @@ import Navbar from "./pages/Navbar";
 import { authService } from "@/services/api";
 import { FingerprintScanner } from "@/pages/FingerprintScanner";
 import Announcement from "@/pages/Announcement";
-import AttendanceList from "./pages/AttendanceList";
+import AttendanceList from "@/pages/AttendanceList";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import { ScanLine, Megaphone, ClipboardList } from "lucide-react";
 
 // Main Layout with Navbar
@@ -33,8 +34,17 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <Routes>
-      {/* Public Route */}
-      <Route path="/login" element={<Login />} />
+      {/* Public Route - Redirect to dashboard if already authenticated */}
+      <Route
+        path="/login"
+        element={
+          authService.isAuthenticated() ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Login />
+          )
+        }
+      />
 
       {/* Kiosk Mode - Full screen, no navbar */}
       <Route
@@ -56,40 +66,47 @@ function App() {
         }
       />
 
-      {/* Student Management */}
+      {/* Student Management - Protected */}
       <Route
         path="/students"
         element={
-          <MainLayout>
-            <StudentList />
-          </MainLayout>
+          <ProtectedRoute>
+            <MainLayout>
+              <StudentList />
+            </MainLayout>
+          </ProtectedRoute>
         }
       />
-       {/* Student Management */}
+
+      {/* Announcements - Protected */}
       <Route
         path="/announcements"
         element={
-          <MainLayout>
-            <Announcement />
-          </MainLayout>
+          <ProtectedRoute>
+            <MainLayout>
+              <Announcement />
+            </MainLayout>
+          </ProtectedRoute>
         }
       />
 
-      {/* Attendance List */}
+      {/* Attendance List - Protected */}
       <Route
         path="/attendance"
         element={
-          <MainLayout>
-            <AttendanceList />
-          </MainLayout>
+          <ProtectedRoute>
+            <MainLayout>
+              <AttendanceList />
+            </MainLayout>
+          </ProtectedRoute>
         }
       />
 
-      {/* Dashboard */}
+      {/* Dashboard - Protected */}
       <Route
         path="/dashboard"
         element={
-          authService.isAuthenticated() ? (
+          <ProtectedRoute>
             <MainLayout>
               <div className="text-center py-6 md:py-10">
                 <div className="inline-flex items-center justify-center p-4 bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl mb-6">
@@ -210,28 +227,14 @@ function App() {
                 </div>
               </div>
             </MainLayout>
-          ) : (
-            <Navigate to="/login" replace />
-          )
+          </ProtectedRoute>
         }
       />
 
-      {/* Dashboard route alias */}
-      <Route path="/dashboard" element={<Navigate to="/" replace />} />
+      {/* Redirect root to dashboard */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      {/* Redirect authenticated users from login to dashboard */}
-      <Route
-        path="/login"
-        element={
-          authService.isAuthenticated() ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <Login />
-          )
-        }
-      />
-
-      {/* Catch all route */}
+      {/* Catch all route - redirect to login */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
