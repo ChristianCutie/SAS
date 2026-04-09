@@ -10,6 +10,6 @@
 .marquee {
   display: inline-block;
   white-space: nowrap;
-  animation: marquee 40s linear infinite;
+  animation: marquee 35s linear infinite;
   padding-right: 2rem;
 }

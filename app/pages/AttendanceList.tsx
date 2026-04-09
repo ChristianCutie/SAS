@@ -28,18 +28,61 @@ import {
     Trash2
 } from 'lucide-react';
 
+interface StudentData {
+    id: number;
+    rfid_tag_number: string | null;
+    profile_picture: string | null;
+    student_number: string;
+    student_status: string;
+    is_active: number;
+    course_name: string;
+    section_name: string;
+    school_year: string;
+    semester: string;
+    first_name: string;
+    middle_name: string;
+    last_name: string;
+    gender: string;
+    birthdate: string;
+    email: string;
+    contact_number: string;
+    guardian_contact_number: string;
+    created_at: string;
+    updated_at: string;
+    is_archived: number;
+    fingerprint_id: string | null;
+}
+
 interface AttendanceRecord {
+    id: number;
+    rfid_tag_number: string | null;
+    student_number: string;
+    time_in: string;
+    time_out: string | null;
+    attendance_date: string;
+    status: 'present' | 'absent' | 'late' | 'excused';
+    created_at: string;
+    updated_at: string;
+    fingerprint_id: string | null;
+    student: StudentData;
+}
+
+interface TransformedRecord {
     id: number;
     student_id: number;
     first_name: string;
+    middle_name: string;
     last_name: string;
     student_number: string;
     course_name: string;
+    section_name: string;
+    school_year: string;
     attendance_date: string;
     check_in_time: string;
     check_out_time: string | null;
     status: 'present' | 'absent' | 'late' | 'excused';
     remarks: string | null;
+    profile_picture: string | null;
 }
 
 interface AttendanceStats {
@@ -51,7 +94,7 @@ interface AttendanceStats {
 }
 
 const AttendanceList = () => {
-    const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+    const [attendanceRecords, setAttendanceRecords] = useState<TransformedRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'present' | 'absent' | 'late' | 'excused'>('all');
@@ -73,12 +116,33 @@ const AttendanceList = () => {
         loadStats();
     }, [attendanceRecords]);
 
+    const transformAttendanceData = (apiData: AttendanceRecord[]): TransformedRecord[] => {
+        return apiData.map(record => ({
+            id: record.id,
+            student_id: record.student.id,
+            first_name: record.student.first_name,
+            middle_name: record.student.middle_name,
+            last_name: record.student.last_name,
+            student_number: record.student.student_number,
+            course_name: record.student.course_name,
+            section_name: record.student.section_name,
+            school_year: record.student.school_year,
+            attendance_date: record.attendance_date,
+            check_in_time: record.time_in,
+            check_out_time: record.time_out,
+            status: record.status,
+            remarks: null,
+            profile_picture: record.student.profile_picture
+        }));
+    };
+
     const loadAttendanceRecords = async () => {
         try {
             setLoading(true);
             // Fetch attendance records from backend API
             const data = await attendanceService.getAttendances();
-            setAttendanceRecords(data);
+            const transformedData = transformAttendanceData(data);
+            setAttendanceRecords(transformedData);
         } catch (error) {
             console.error('Failed to load attendance records:', error);
             setAttendanceRecords([]);
@@ -197,6 +261,14 @@ const AttendanceList = () => {
                 return <Badge variant="outline">{status}</Badge>;
         }
     };
+
+
+      const getImageUrl = (path: string | null): string | undefined => {
+        if (!path) return undefined;
+        if (path.startsWith('http')) return path;
+        return `https://api-sas.slarenasitsolutions.com/public/${path}`;
+    };
+
 
     return (
         <div className="space-y-6">
@@ -416,8 +488,19 @@ const AttendanceList = () => {
                                         >
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
-                                                        <User className="w-5 h-5 text-slate-600" />
+                                                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                                                        {record.profile_picture ? (
+                                                            <img
+                                                                src={getImageUrl(record.profile_picture)}
+                                                                alt="Profile"
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => {
+                                                                    e.currentTarget.style.display = 'none';
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <User className="w-5 h-5 text-slate-600" />
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <div className="font-medium text-slate-900">

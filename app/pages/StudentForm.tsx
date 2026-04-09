@@ -9,7 +9,10 @@ import {
     BookOpen,
     Hash,
     AlertCircle,
-    CheckCircle2
+    CheckCircle2,
+    Upload,
+    Image as ImageIcon,
+    Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +31,10 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [profilePicturePreview, setProfilePicturePreview] = useState<string | null>(null);
+    const [profilePictureFile, setProfilePictureFile] = useState<File | null>(null);
+    const [existingProfilePicture, setExistingProfilePicture] = useState<string | null>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const [formData, setFormData] = useState({
         rfid_tag_number: '',
@@ -49,6 +56,14 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Helper function to get full image URL
+    const getImageUrl = (path: string | null): string | null => {
+        if (!path) return null;
+        if (path.startsWith('http')) return path; // Already a full URL
+        // Construct full URL from relative path
+        return `https://api-sas.slarenasitsolutions.com/public/${path}`;
+    };
 
     useEffect(() => {
         if (student) {
@@ -75,6 +90,17 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
                 contact_number: student.contact_number || '',
                 guardian_contact_number: student.guardian_contact_number || '',
             });
+
+            // Load existing profile picture if available
+            if (student.profile_picture) {
+                setExistingProfilePicture(student.profile_picture);
+                setProfilePicturePreview(getImageUrl(student.profile_picture));
+            }
+        } else {
+            // Reset when creating new student
+            setExistingProfilePicture(null);
+            setProfilePicturePreview(null);
+            setProfilePictureFile(null);
         }
     }, [student]);
 
@@ -104,6 +130,35 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
                 return newErrors;
             });
         }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setProfilePictureFile(file);
+            
+            // Create preview
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setProfilePicturePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+
+            // Clear any file error
+            if (errors.profile_picture) {
+                setErrors(prev => {
+                    const newErrors = { ...prev };
+                    delete newErrors.profile_picture;
+                    return newErrors;
+                });
+            }
+        }
+    };
+
+    const handleRemoveProfilePicture = () => {
+        setProfilePictureFile(null);
+        setProfilePicturePreview(null);
+        // Keep existingProfilePicture intact - user is in process of removing, but form hasn't been submitted
     };
 
     const validateForm = () => {
@@ -142,18 +197,55 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
         setSuccess(null);
 
         try {
+            const submitData = profilePictureFile
+                ? (() => {
+                    const form = new FormData();
+                    // Add all form fields
+                    Object.entries(formData).forEach(([key, value]) => {
+                        // Convert boolean to 1 or 0 for Laravel
+                        if (typeof value === 'boolean') {
+                            form.append(key, value ? '1' : '0');
+                        } else {
+                            form.append(key, String(value));
+                        }
+                    });
+                    // Add file
+                    form.append('profile_picture', profilePictureFile);
+                    return form;
+                })()
+                : (() => {
+                    // When no file, convert boolean values for regular object submission
+                    const data = { ...formData } as any;
+                    Object.entries(data).forEach(([key, value]) => {
+                        if (typeof value === 'boolean') {
+                            data[key] = value ? 1 : 0;
+                        }
+                    });
+                    // If editing and user removed the existing image (there was one but preview is now null)
+                    if (student && existingProfilePicture && !profilePicturePreview) {
+                        data['clear_profile_picture'] = true;
+                    }
+                    return data;
+                })()
+
             if (student) {
                 // Update existing student
-                await studentService.updateStudent(student.id, formData);
+                await studentService.updateStudent(student.id, submitData);
                 setSuccess('Student updated successfully!');
             } else {
                 // Create new student
-                await studentService.createStudent(formData);
+                await studentService.createStudent(submitData);
                 setSuccess('Student created successfully!');
             }
 
             // Wait a moment to show success message, then close
             setTimeout(() => {
+                // Reset profile picture states
+                setProfilePictureFile(null);
+                setProfilePicturePreview(null);
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
                 onSuccess();
             }, 1500);
         } catch (err: any) {
@@ -245,6 +337,94 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
                                 <User className="w-5 h-5 text-blue-600" />
                                 Student Information
                             </h3>
+
+                            {/* Profile Picture Upload */}
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                <Label className="text-slate-700 font-semibold mb-3 flex items-center gap-2">
+                                    <ImageIcon className="w-4 h-4" />
+                                    Profile Picture
+                                </Label>
+                                
+                                {profilePicturePreview && (
+                                    <div className="mb-4 flex gap-4">
+                                        <div className="relative">
+                                            <img
+                                                src={profilePicturePreview}
+                                                alt="Profile Preview"
+                                                className="w-24 h-24 rounded-lg object-cover border border-slate-300"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleRemoveProfilePicture}
+                                                className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 transition"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <div>
+                                            {profilePictureFile ? (
+                                                <>
+                                                    <p className="text-sm text-slate-600">
+                                                        <span className="font-semibold">File:</span> {profilePictureFile.name}
+                                                    </p>
+                                                    <p className="text-xs text-slate-500 mt-1">
+                                                        Size: {(profilePictureFile.size / 1024 > 1024) ? 
+                                                            (profilePictureFile.size / (1024 * 1024)).toFixed(2) + ' MB' :
+                                                            (profilePictureFile.size / 1024).toFixed(2) + ' KB'
+                                                        }
+                                                    </p>
+                                                    <p className="text-xs text-emerald-600 mt-1 font-semibold">New image selected</p>
+                                                </>
+                                            ) : (
+                                                <p className="text-xs text-slate-600">Current profile picture</p>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={handleRemoveProfilePicture}
+                                                className="text-xs text-red-600 hover:text-red-700 mt-2"
+                                            >
+                                                Remove image
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="relative">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        id="profile_picture"
+                                        name="profile_picture"
+                                        accept="image/jpeg,image/jpg,image/png"
+                                        onChange={handleFileChange}
+                                        disabled={loading}
+                                        className="hidden"
+                                    />
+                                    <label
+                                        htmlFor="profile_picture"
+                                        className={`flex flex-col items-center justify-center w-full p-6 border-2 border-dashed rounded-lg cursor-pointer transition ${
+                                            profilePictureFile
+                                                ? 'border-blue-300 bg-blue-50'
+                                                : 'border-slate-300 bg-slate-50 hover:bg-slate-100'
+                                        } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        <Upload className="w-6 h-6 text-slate-400 mb-2" />
+                                        <span className="text-sm font-semibold text-slate-700">
+                                            {profilePictureFile ? 'Click to change' : 'Click to upload'} or drag and drop
+                                        </span>
+                                        <span className="text-xs text-slate-500 mt-1">
+                                            JPG, JPEG, PNG (Max 5MB)
+                                        </span>
+                                    </label>
+                                </div>
+
+                                {errors.profile_picture && (
+                                    <p className="text-sm text-red-600 mt-2">{errors.profile_picture}</p>
+                                )}
+                                <p className="text-xs text-slate-500 mt-2">
+                                    Upload a clear, professional-looking profile photo. Recommended size: 400x400px or larger.
+                                </p>
+                            </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {/* First Name */}

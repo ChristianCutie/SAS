@@ -164,7 +164,16 @@ export const studentService = {
     // Create new student
     createStudent: async (studentData: any) => {
         try {
-            const response = await api.post('/create/students', studentData);
+            const config: any = {};
+            
+            // For FormData, let axios handle the Content-Type and boundary
+            if (studentData instanceof FormData) {
+                config.headers = {
+                    'Content-Type': undefined,
+                };
+            }
+            
+            const response = await api.post('/create/students', studentData, config);
             return response.data;
         } catch (error) {
             console.error('Error creating student:', error);
@@ -175,7 +184,16 @@ export const studentService = {
     // Update student
     updateStudent: async (id: number, studentData: any) => {
         try {
-            const response = await api.post(`/update/students/${id}`, studentData);
+            const config: any = {};
+            
+            // For FormData, let axios handle the Content-Type and boundary
+            if (studentData instanceof FormData) {
+                config.headers = {
+                    'Content-Type': undefined,
+                };
+            }
+            
+            const response = await api.post(`/update/students/${id}`, studentData, config);
             return response.data;
         } catch (error) {
             console.error(`Error updating student ${id}:`, error);
@@ -464,6 +482,7 @@ export interface Student {
     id: number;
     rfid_tag_number: string;
     student_number: string;
+    profile_picture?: string | null;
     student_status: string;
     is_active: boolean;
     course_name: string;

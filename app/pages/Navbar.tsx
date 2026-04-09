@@ -136,7 +136,7 @@ const Navbar = () => {
                                     className="relative h-10 w-10 rounded-full hover:bg-gray-50 transition-all duration-200"
                                 >
                                     <Avatar className="h-9 w-9">
-                                        <AvatarImage src="/app/assets/images/cat.png" />
+                                        <AvatarImage src="./app/assets/images/cat.png" />
                                     </Avatar>
                                     <ChevronDown className="h-3 w-3 ml-1 text-gray-500" />
                                 </Button>

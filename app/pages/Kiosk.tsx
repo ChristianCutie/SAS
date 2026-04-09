@@ -15,6 +15,7 @@ interface RecentRecord {
   id: number;
   first_name: string;
   last_name: string;
+  profile_picture_url?: string | null;
   time_in: string;
   time_out?: string;
 }
@@ -82,14 +83,14 @@ const Kiosk = () => {
             id: record.id,
             first_name: record.student?.first_name || record.first_name || "",
             last_name: record.student?.last_name || record.last_name || "",
+
+            // FIX HERE
+            profile_picture_url:
+              record.profile_picture_url || record.student?.profile_picture || null,
+
             time_in: record.time_in || record.created_at,
             time_out: record.time_out || undefined,
           }))
-          .sort((a: RecentRecord, b: RecentRecord) => {
-            return (
-              new Date(b.time_in).getTime() - new Date(a.time_in).getTime()
-            );
-          });
         setRecentRecords(records);
       }
     } catch (error) {
@@ -220,6 +221,18 @@ const Kiosk = () => {
     });
   };
 
+  const getImageUrl = (path: string | null): string | undefined => {
+    if (!path) return undefined;
+
+    // Clean escaped slashes
+    const cleanPath = path.replace(/\\/g, '');
+
+    // If already full URL
+    if (cleanPath.startsWith('http')) return cleanPath;
+
+    return `https://api-sas.slarenasitsolutions.com/public/${cleanPath}`;
+  };
+
   return (
     <div className="w-screen h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-6 flex flex-col overflow-hidden relative">
       {/* Animated Background Blobs */}
@@ -302,11 +315,25 @@ const Kiosk = () => {
                     <div className="w-full flex gap-10">
                       {/* Left Column - Avatar and Name */}
                       <div className="flex flex-col items-center justify-start flex-shrink-0">
-                        <img
-                          src={`https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}&background=3b82f6&color=fff`}
-                          className="w-45 h-45 rounded-full shadow-2xl border-2 border-white/20 object-cover"
-                        />
-
+                        {record.profile_picture_url ? (
+                          <img
+                            src={
+                              getImageUrl(record.profile_picture_url) ||
+                              `https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}`
+                            }
+                            alt="Profile"
+                            className="w-45 h-45 rounded-full shadow-2xl border-2 border-white/20 object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = `https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}&background=3b82f6&color=fff`;
+                            }}
+                          />
+                        ) : (
+                          <img
+                            src={`https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}&background=3b82f6&color=fff`}
+                            className="w-45 h-45 rounded-full shadow-2xl border-2 border-white/20 object-cover"
+                            alt="Avatar"
+                          />
+                        )}
                       </div>
 
                       {/* Right Column - Time In/Out Details */}

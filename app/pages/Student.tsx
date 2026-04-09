@@ -218,6 +218,12 @@ const StudentList = () => {
         );
     }
 
+    const getImageUrl = (path: string | null): string | undefined => {
+        if (!path) return undefined;
+        if (path.startsWith('http')) return path;
+        return `https://api-sas.slarenasitsolutions.com/public/${path}`;
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -285,7 +291,7 @@ const StudentList = () => {
                                 <Filter className="h-4 w-4 mr-2" />
                                 Filter
                             </Button>
-                            <Button 
+                            <Button
                                 variant="outline"
                                 onClick={exportToExcel}
                                 disabled={activeStudents.length === 0}
@@ -404,8 +410,19 @@ const StudentList = () => {
                                         >
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
-                                                        <User className="w-5 h-5 text-slate-600" />
+                                                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                                                        {student.profile_picture ? (
+                                                            <img
+                                                                src={getImageUrl(student.profile_picture)}
+                                                                alt="Profile"
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => {
+                                                                    e.currentTarget.style.display = 'none';
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <User className="w-5 h-5 text-slate-600" />
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <div className="font-medium text-slate-900">
