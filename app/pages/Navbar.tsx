@@ -135,8 +135,9 @@ const Navbar = () => {
                                     variant="ghost"
                                     className="relative h-10 w-10 rounded-full hover:bg-gray-50 transition-all duration-200"
                                 >
-                                    <Avatar className="h-9 w-9">
-                                        <AvatarImage src="./app/assets/images/cat.png" />
+                                    <Avatar className="h-10 w-10">
+                                        <AvatarImage src="https://api.dicebear.com/9.x/thumbs/svg?seed=Aneka" />
+                                       
                                     </Avatar>
                                     <ChevronDown className="h-3 w-3 ml-1 text-gray-500" />
                                 </Button>
