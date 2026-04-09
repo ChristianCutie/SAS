@@ -6,7 +6,8 @@ import Navbar from "./pages/Navbar";
 import { authService } from "@/services/api";
 import { FingerprintScanner } from "@/pages/FingerprintScanner";
 import Announcement from "@/pages/Announcement";
-import { ScanLine } from "lucide-react";
+import AttendanceList from "./pages/AttendanceList";
+import { ScanLine, Megaphone, ClipboardList } from "lucide-react";
 
 // Main Layout with Navbar
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
@@ -70,6 +71,16 @@ function App() {
         element={
           <MainLayout>
             <Announcement />
+          </MainLayout>
+        }
+      />
+
+      {/* Attendance List */}
+      <Route
+        path="/attendance"
+        element={
+          <MainLayout>
+            <AttendanceList />
           </MainLayout>
         }
       />
@@ -152,6 +163,46 @@ function App() {
                         </h3>
                         <p className="text-sm text-slate-500">
                           Full-screen attendance scanner
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+
+                  {/* Future feature: Announcements */}
+                   <Link
+                    to="/announcements"
+                    className="group p-6 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-500 transition-all duration-300 text-left no-underline"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-slate-200 transition-colors">
+                        <Megaphone className="w-6 h-6 text-slate-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-slate-900 mb-1">
+                          Announcements
+                        </h3>
+                        <p className="text-sm text-slate-500">
+                          Manage announcements
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+
+                  {/* Future feature: Attendance */}
+                   <Link
+                    to="/attendance"
+                    className="group p-6 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-lime-500 transition-all duration-300 text-left no-underline"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-lime-100 rounded-xl group-hover:bg-lime-200 transition-colors">
+                        <ClipboardList className="w-6 h-6 text-lime-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-slate-900 mb-1">
+                          Attendance
+                        </h3>
+                        <p className="text-sm text-slate-500">
+                          Manage attendance records
                         </p>
                       </div>
                     </div>

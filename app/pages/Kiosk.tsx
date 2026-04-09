@@ -16,6 +16,7 @@ interface RecentRecord {
   first_name: string;
   last_name: string;
   time_in: string;
+  time_out?: string;
 }
 
 const Kiosk = () => {
@@ -82,6 +83,7 @@ const Kiosk = () => {
             first_name: record.student?.first_name || record.first_name || "",
             last_name: record.student?.last_name || record.last_name || "",
             time_in: record.time_in || record.created_at,
+            time_out: record.time_out || undefined,
           }))
           .sort((a: RecentRecord, b: RecentRecord) => {
             return (
@@ -119,7 +121,7 @@ const Kiosk = () => {
     const audio = new Audio(
       type === "success" ? "/sounds/success.mp3" : "/sounds/error.mp3",
     );
-    audio.play().catch(() => {});
+    audio.play().catch(() => { });
   };
 
   const handleScan = async (e: React.FormEvent) => {
@@ -246,12 +248,6 @@ const Kiosk = () => {
         </div>
       </div>
 
-      {/* FLOATING DATE & TIME */}
-      <div className="absolute top-6 left-6 z-20 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-6 py-3 shadow-xl text-white font-semibold hover:bg-white/15 transition-all">
-        <p className="text-sm text-white/70">{currentDate}</p>
-        <p className="text-2xl font-bold text-white">{currentTime}</p>
-      </div>
-
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-10">
         {!loadingRecords && recentRecords.length === 0 ? (
@@ -295,7 +291,7 @@ const Kiosk = () => {
               return (
                 <div
                   key={index}
-                  className="bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl hover:shadow-3xl flex flex-col items-center justify-center p-8 transition-all duration-300 hover:border-white/20 hover:bg-gradient-to-br hover:from-white/20 hover:to-white/10"
+                  className="bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl hover:shadow-3xl flex items-start justify-start p-10 transition-all duration-300 hover:border-white/20 hover:bg-gradient-to-br hover:from-white/20 hover:to-white/10"
                 >
                   {loadingRecords ? (
                     <div className="flex items-center gap-2">
@@ -303,23 +299,52 @@ const Kiosk = () => {
                       <p className="text-white/60 text-lg">Loading...</p>
                     </div>
                   ) : record ? (
-                    <>
-                      <img
-                        src={`https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}&background=3b82f6&color=fff`}
-                        className="w-32 h-32 rounded-full mb-6 shadow-2xl border-2 border-white/20 object-cover"
-                      />
-                      <h2 className="text-2xl font-bold text-white text-center mb-4">
-                        {record.first_name} {record.last_name}
-                      </h2>
-                      <div className="flex flex-col items-center gap-2">
-                        <p className="text-lg font-semibold text-cyan-400">
-                          {formatTimeIn(record.time_in)}
-                        </p>
-                        <p className="text-sm text-white/60">
-                          {new Date(record.time_in).toLocaleDateString()}
-                        </p>
+                    <div className="w-full flex gap-10">
+                      {/* Left Column - Avatar and Name */}
+                      <div className="flex flex-col items-center justify-start flex-shrink-0">
+                        <img
+                          src={`https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}&background=3b82f6&color=fff`}
+                          className="w-45 h-45 rounded-full shadow-2xl border-2 border-white/20 object-cover"
+                        />
+
                       </div>
-                    </>
+
+                      {/* Right Column - Time In/Out Details */}
+                      <div className="flex-1 flex flex-col gap-4 justify-start">
+                        <div className="flex flex-col gap-1">
+                          <h2 className="text-3xl font-bold text-white leading-tight">
+                            {record.first_name} {" "} {record.last_name}
+                          </h2>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-semibold text-white/50 uppercase tracking-widest">
+                              Time In:
+                            </h2>
+                            <h2 className="text-xl font-semibold text-cyan-400">
+                              {formatTimeIn(record.time_in)}
+                            </h2>
+                          </div>
+
+                          {record.time_out && (
+                            <div className="flex items-center gap-2">
+                              <h2 className="text-xl font-semibold text-white/50 uppercase tracking-widest">
+                                Time Out:
+                              </h2>
+                              <h2 className="text-xl font-semibold text-purple-400">
+                                {formatTimeIn(record.time_out)}
+                              </h2>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1 border-t border-white/20 pt-3">
+                          <h2 className="text-xl font-semibold text-white/50 uppercase tracking-widest">Date</h2>
+                          <h2 className="text-xl text-white/70 font-medium">
+                            {new Date(record.time_in).toLocaleDateString()}
+                          </h2>
+                        </div>
+                      </div>
+                    </div>
                   ) : null}
                 </div>
               );
@@ -328,24 +353,37 @@ const Kiosk = () => {
         )}
       </div>
 
-      {/* ANNOUNCEMENT BAR */}
-      <div className="w-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-md text-white py-6 overflow-hidden mt-6 rounded-2xl border border-white/10 shadow-2xl relative z-10">
-        <div className="flex gap-16">
-          <div className="marquee text-xl font-semibold text-white/90">
-            {announcements.length > 0
-              ? announcements.map((announcement, index) => (
+      <div className="grid grid-cols-12 gap-4 w-full mt-6">
+
+        {/* ANNOUNCEMENT - 10 COLS */}
+        <div className="col-span-10 bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-md text-white py-6 overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
+          <div className="flex gap-16">
+            <div className="marquee text-xl font-semibold text-white/90">
+              {announcements.length > 0
+                ? announcements.map((announcement, index) => (
                   <span key={index}>📢 Announcement: {announcement} • </span>
                 ))
-              : "📢 Announcement: Welcome to the School Attendance System • Please tap your RFID properly • Keep your ID visible at all times • Have a great day!"}
-          </div>
-          <div className="marquee text-lg font-semibold text-white/90">
-            {announcements.length > 0
-              ? announcements.map((announcement, index) => (
+                : "📢 Announcement: Welcome to the School Attendance System • Please tap your RFID properly • Keep your ID visible at all times • Have a great day!"}
+            </div>
+
+            <div className="marquee text-xl font-semibold text-white/90">
+              {announcements.length > 0
+                ? announcements.map((announcement, index) => (
                   <span key={index}>📢 Announcement: {announcement} • </span>
                 ))
-              : "📢 Announcement: Welcome to the School Attendance System • Please tap your RFID properly • Keep your ID visible at all times • Have a great day!"}
+                : "📢 Announcement: Welcome to the School Attendance System • Please tap your RFID properly • Keep your ID visible at all times • Have a great day!"}
+            </div>
           </div>
         </div>
+
+        {/* DATE & TIME - 2 COLS */}
+        <div className="col-span-2 flex items-center justify-center">
+          <div className="w-full bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-3 shadow-xl text-white font-semibold text-center hover:bg-white/15 transition-all">
+            <p className="text-sm text-white/70">{currentDate}</p>
+            <p className="text-2xl font-bold text-white">{currentTime}</p>
+          </div>
+        </div>
+
       </div>
 
       {/* MODAL */}
@@ -362,7 +400,7 @@ const Kiosk = () => {
 
             <p className="text-white font-semibold">Attendance Recorded</p>
 
-            {/* ✅ 5 MINUTES APPROACHING MESSAGE */}
+            {/* 5 MINUTES APPROACHING MESSAGE */}
             {approachingMessage && (
               <div className="mt-4 px-4 py-2 bg-yellow-500/20 border border-yellow-400 rounded-xl">
                 <p className="text-yellow-300 font-semibold">

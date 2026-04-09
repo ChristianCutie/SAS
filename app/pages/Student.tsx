@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { utils, writeFile } from 'xlsx';
 import {
     Table,
     TableBody,
@@ -143,7 +144,51 @@ const StudentList = () => {
         loadStats();
     };
 
-    // Filter students based on search term and archive status
+    const exportToExcel = () => {
+        if (activeStudents.length === 0) {
+            alert('No active students to export');
+            return;
+        }
+
+        // Prepare data for export
+        const dataToExport = activeStudents.map(student => ({
+            'Student Number': student.student_number,
+            'First Name': student.first_name,
+            'Middle Name': student.middle_name || '',
+            'Last Name': student.last_name,
+            'Course': student.course_name,
+            'Section': student.section_name,
+            'RFID Tag': student.rfid_tag_number || 'Not assigned',
+            'Status': student.is_active ? 'Active' : 'Inactive',
+            'Student Status': student.student_status
+        }));
+
+        // Create workbook and worksheet
+        const worksheet = utils.json_to_sheet(dataToExport);
+        const workbook = utils.book_new();
+        utils.book_append_sheet(workbook, worksheet, 'Active Students');
+
+        // Set column widths for better readability
+        const columnWidths = [
+            { wch: 15 }, // Student Number
+            { wch: 15 }, // First Name
+            { wch: 15 }, // Middle Name
+            { wch: 15 }, // Last Name
+            { wch: 20 }, // Course
+            { wch: 12 }, // Section
+            { wch: 20 }, // RFID Tag
+            { wch: 12 }, // Status
+            { wch: 18 }  // Student Status
+        ];
+        worksheet['!cols'] = columnWidths;
+
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().split('T')[0];
+        const filename = `Active_Students_${timestamp}.xlsx`;
+
+        // Write the file
+        writeFile(workbook, filename);
+    };
     const filteredStudents = students.filter(student => {
         const matchesSearch =
             student.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -240,7 +285,12 @@ const StudentList = () => {
                                 <Filter className="h-4 w-4 mr-2" />
                                 Filter
                             </Button>
-                            <Button variant="outline">
+                            <Button 
+                                variant="outline"
+                                onClick={exportToExcel}
+                                disabled={activeStudents.length === 0}
+                                title="Export active students to Excel"
+                            >
                                 <Download className="h-4 w-4" />
                             </Button>
                         </div>
