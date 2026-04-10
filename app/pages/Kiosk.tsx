@@ -36,10 +36,26 @@ const Kiosk = () => {
   const [approachingMessage, setApproachingMessage] = useState("");
   const [errorTitle, setErrorTitle] = useState("Not Registered");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true);
 
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const modalTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Reset inactivity timeout
+  const resetInactivityTimer = () => {
+    // Clear existing timeout
+    if (inactivityTimeoutRef.current) {
+      clearTimeout(inactivityTimeoutRef.current);
+    }
+
+    // Set new timeout for 2 minutes (120000 ms)
+    setShowWelcome(false);
+    inactivityTimeoutRef.current = setTimeout(() => {
+      setShowWelcome(true);
+    }, 5000);
+  };
 
   // Close all modals
   const closeAllModals = () => {
@@ -67,6 +83,9 @@ const Kiosk = () => {
     loadRecentRecords();
     loadAnnouncements();
 
+    // Initialize inactivity timer
+    resetInactivityTimer();
+
     const interval = setInterval(() => {
       updateDateTime();
     }, 1000);
@@ -74,6 +93,7 @@ const Kiosk = () => {
     return () => {
       clearInterval(interval);
       if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+      if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
     };
   }, []);
 
@@ -176,6 +196,7 @@ const Kiosk = () => {
 
       if (isSuccess && result?.attendance) {
         playSound("success");
+        resetInactivityTimer(); // Reset timer on successful tap
         const attendance = result.attendance;
 
         let studentData: ScannedStudent | null = null;
@@ -368,7 +389,7 @@ const Kiosk = () => {
 
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-10">
-        {!loadingRecords && recentRecords.length === 0 ? (
+        {showWelcome || (!loadingRecords && recentRecords.length === 0) ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="inline-flex items-center justify-center p-5 bg-gradient-to-br from-blue-400/20 to-purple-400/20 backdrop-blur-sm border border-white/10 rounded-3xl mb-8 shadow-2xl">
               <svg

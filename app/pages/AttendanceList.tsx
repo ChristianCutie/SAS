@@ -35,7 +35,6 @@ interface StudentData {
     student_number: string;
     student_status: string;
     is_active: number;
-    course_name: string;
     section_name: string;
     school_year: string;
     semester: string;
@@ -74,7 +73,6 @@ interface TransformedRecord {
     middle_name: string;
     last_name: string;
     student_number: string;
-    course_name: string;
     section_name: string;
     school_year: string;
     attendance_date: string;
@@ -124,7 +122,6 @@ const AttendanceList = () => {
             middle_name: record.student.middle_name,
             last_name: record.student.last_name,
             student_number: record.student.student_number,
-            course_name: record.student.course_name,
             section_name: record.student.section_name,
             school_year: record.student.school_year,
             attendance_date: record.attendance_date,
@@ -197,7 +194,6 @@ const AttendanceList = () => {
         const dataToExport = filteredRecords.map(record => ({
             'Student Number': record.student_number,
             'Student Name': `${record.last_name}, ${record.first_name}`,
-            'Course': record.course_name,
             'Date': new Date(record.attendance_date).toLocaleDateString(),
             'Check-in Time': record.check_in_time || '-',
             'Check-out Time': record.check_out_time || '-',
@@ -235,8 +231,7 @@ const AttendanceList = () => {
         const matchesSearch =
             (record.first_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (record.last_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (record.student_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (record.course_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+            (record.student_number || '').toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesStatus = filterStatus === 'all' || record.status === filterStatus;
 
@@ -470,12 +465,10 @@ const AttendanceList = () => {
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent">
                                         <TableHead className="font-semibold text-slate-700">Student Info</TableHead>
-                                        <TableHead className="font-semibold text-slate-700">Course</TableHead>
                                         <TableHead className="font-semibold text-slate-700">Date</TableHead>
                                         <TableHead className="font-semibold text-slate-700">Check-in</TableHead>
                                         <TableHead className="font-semibold text-slate-700">Check-out</TableHead>
                                         <TableHead className="font-semibold text-slate-700">Status</TableHead>
-                                        <TableHead className="font-semibold text-slate-700">Remarks</TableHead>
                                         <TableHead className="font-semibold text-slate-700 text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -513,11 +506,6 @@ const AttendanceList = () => {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="text-sm text-slate-700">
-                                                    {record.course_name}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="text-sm text-slate-700">
                                                     {new Date(record.attendance_date).toLocaleDateString()}
                                                 </div>
                                             </TableCell>
@@ -533,11 +521,6 @@ const AttendanceList = () => {
                                             </TableCell>
                                             <TableCell>
                                                 {getStatusBadge(record.status)}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="text-sm text-slate-600 max-w-xs truncate">
-                                                    {record.remarks || '-'}
-                                                </div>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
