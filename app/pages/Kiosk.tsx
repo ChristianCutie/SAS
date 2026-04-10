@@ -27,7 +27,8 @@ const Kiosk = () => {
   );
   const [showScannedModal, setShowScannedModal] = useState(false);
   const [showNotRegisteredModal, setShowNotRegisteredModal] = useState(false);
-  const [notRegisteredMessage, setNotRegisteredMessage] = useState("");
+  const [showWaitModal, setShowWaitModal] = useState(false);
+  const [waitMessage, setWaitMessage] = useState("");
   const [recentRecords, setRecentRecords] = useState<RecentRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [currentDate, setCurrentDate] = useState<string>("");
@@ -91,6 +92,12 @@ const Kiosk = () => {
             time_in: record.time_in || record.created_at,
             time_out: record.time_out || undefined,
           }))
+          // Sort by updated_at (most recent first)
+          .sort((a, b) => {
+            const timeA = new Date(a.time_out || a.time_in).getTime();
+            const timeB = new Date(b.time_out || b.time_in).getTime();
+            return timeB - timeA; // Most recent first
+          });
         setRecentRecords(records);
       }
     } catch (error) {
@@ -136,6 +143,7 @@ const Kiosk = () => {
       const isSuccess =
         result?.isSuccess ||
         result?.status === "success" ||
+        result?.success === true ||
         !!result?.attendance;
 
       if (isSuccess && result?.attendance) {
@@ -183,12 +191,79 @@ const Kiosk = () => {
         playSound("error");
         const errorMessage = result?.message || "Student not registered";
 
-        if (errorMessage.toLowerCase().includes("already timed in and out")) {
+        // Check for 5-minute wait message
+        if (errorMessage.toLowerCase().includes("please wait") && errorMessage.toLowerCase().includes("minute")) {
+          setWaitMessage(errorMessage);
+          setShowWaitModal(true);
+
+          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+          modalTimeoutRef.current = setTimeout(() => {
+            setShowWaitModal(false);
+            inputRef.current?.focus();
+          }, 4000);
+        } else if (errorMessage.toLowerCase().includes("already timed in and out")) {
           setErrorTitle("Attendance Completed");
+          setShowNotRegisteredModal(true);
+
+          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+          modalTimeoutRef.current = setTimeout(() => {
+            setShowNotRegisteredModal(false);
+            inputRef.current?.focus();
+          }, 3000);
+        } else if (errorMessage.toLowerCase().includes("rfid")) {
+          setErrorTitle("RFID Not Recognized");
+          setShowNotRegisteredModal(true);
+
+          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+          modalTimeoutRef.current = setTimeout(() => {
+            setShowNotRegisteredModal(false);
+            inputRef.current?.focus();
+          }, 3000);
+        } else {
+          setErrorTitle("Not Registered");
+          setShowNotRegisteredModal(true);
+
+          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+          modalTimeoutRef.current = setTimeout(() => {
+            setShowNotRegisteredModal(false);
+            inputRef.current?.focus();
+          }, 3000);
+        }
+      }
+    } catch (error: any) {
+      playSound("error");
+      
+      // Extract error message from various error response formats
+      let errorMessage = "Student not registered";
+      
+      if (error.response?.data?.message) {
+        // Handle axios error with response message
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        // Handle alternative error format
+        errorMessage = error.response.data.error;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Check for 5-minute wait message
+      if (errorMessage.toLowerCase().includes("please wait") && errorMessage.toLowerCase().includes("minute")) {
+        setWaitMessage(errorMessage);
+        setShowWaitModal(true);
+
+        if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+        modalTimeoutRef.current = setTimeout(() => {
+          setShowWaitModal(false);
+          inputRef.current?.focus();
+        }, 4000);
+      } else {
+        // Set appropriate error title based on message
+        if (errorMessage.toLowerCase().includes("rfid")) {
+          setErrorTitle("RFID Not Recognized");
         } else {
           setErrorTitle("Not Registered");
         }
-        setNotRegisteredMessage(errorMessage);
+        
         setShowNotRegisteredModal(true);
 
         if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
@@ -197,19 +272,7 @@ const Kiosk = () => {
           inputRef.current?.focus();
         }, 3000);
       }
-    } catch (error) {
-      playSound("error");
-      const errorMessage =
-        error instanceof Error ? error.message : "Student not registered";
-      setNotRegisteredMessage(errorMessage);
-      setShowNotRegisteredModal(true);
       setRfid("");
-
-      if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
-      modalTimeoutRef.current = setTimeout(() => {
-        setShowNotRegisteredModal(false);
-        inputRef.current?.focus();
-      }, 3000);
     }
   };
 
@@ -439,6 +502,41 @@ const Kiosk = () => {
         </div>
       )}
 
+      {/* WAIT 5 MINUTES MODAL */}
+      {showWaitModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
+          <div className="bg-gradient-to-br from-amber-900/40 to-orange-900/40 border border-amber-400/50 p-12 rounded-3xl text-center shadow-2xl scale-in animate-in duration-300">
+            <div className="mb-6 relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 rounded-full blur-2xl"></div>
+              <div className="flex items-center justify-center w-32 h-32 rounded-full mx-auto relative border-2 border-amber-400/50 bg-amber-500/10">
+                <svg
+                  className="w-16 h-16 text-amber-400 animate-bounce"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+            </div>
+            <h2 className="text-4xl font-bold text-white mb-4">Please Wait</h2>
+            <p className="text-amber-300 text-xl mb-6 font-semibold">
+              {waitMessage}
+            </p>
+            <div className="flex items-center gap-2 justify-center text-white/70">
+              <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse animation-delay-300"></div>
+              <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse animation-delay-600"></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* NOT REGISTERED MODAL */}
       {showNotRegisteredModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
@@ -462,9 +560,6 @@ const Kiosk = () => {
               </div>
             </div>
             <h2 className="text-4xl font-bold text-white mb-4">{errorTitle}</h2>
-            <p className="text-red-300 text-lg mb-4 font-semibold">
-              {notRegisteredMessage}
-            </p>
             <div className="flex flex-col items-center gap-3 mb-4">
               <div className="flex items-center gap-2 text-white">
                 <svg

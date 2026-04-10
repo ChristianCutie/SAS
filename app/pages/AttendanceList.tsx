@@ -269,7 +269,6 @@ const AttendanceList = () => {
         return `https://api-sas.slarenasitsolutions.com/public/${path}`;
     };
 
-
     return (
         <div className="space-y-6">
             {/* Header */}
