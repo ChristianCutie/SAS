@@ -54,7 +54,7 @@ const Kiosk = () => {
     setShowWelcome(false);
     inactivityTimeoutRef.current = setTimeout(() => {
       setShowWelcome(true);
-    }, 5000);
+    }, 30000);
   };
 
   // Close all modals

@@ -390,7 +390,25 @@ export const attendanceService = {
 
 // Dashboard Service
 export const dashboardService = {
-    // Get dashboard stats
+    // Get dashboard data including attendance stats
+    getDashboardData: async () => {
+        try {
+            const response = await api.get('/dashboard');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching dashboard data:', error);
+            // Return mock data for development
+            return {
+                total_students: 342,
+                present_today: 289,
+                time_in_only: 45,
+                completed: 244,
+                recent_attendance: []
+            };
+        }
+    },
+
+    // Get dashboard stats (alternative)
     getStats: async () => {
         try {
             const response = await api.get('/dashboard/stats');
@@ -477,7 +495,297 @@ export const announcementService = {
     }
 };
 
+// Employee Attendance Service
+export const employeeAttendanceService = {
+    // Cache for pending requests
+    _getEmployeeAttendancePending: null as Promise<any> | null,
+
+    // Get all employee attendance records
+    getEmployeeAttendance: async () => {
+        try {
+            // If pending request exists, return it
+            if (employeeAttendanceService._getEmployeeAttendancePending) {
+                return employeeAttendanceService._getEmployeeAttendancePending;
+            }
+
+            employeeAttendanceService._getEmployeeAttendancePending = api.get('/employee/attendance');
+            
+            const response = await employeeAttendanceService._getEmployeeAttendancePending;
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching employee attendance:', error);
+            throw error;
+        } finally {
+            employeeAttendanceService._getEmployeeAttendancePending = null;
+        }
+    },
+
+    // Get employee attendance by ID
+    getEmployeeAttendanceById: async (employeeId: number) => {
+        try {
+            const response = await api.get(`/employee/${employeeId}/attendance`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error fetching attendance for employee ${employeeId}:`, error);
+            throw error;
+        }
+    },
+
+    // Get employee attendance by date range
+    getEmployeeAttendanceByDateRange: async (startDate: string, endDate: string) => {
+        try {
+            const response = await api.get('/employee/attendance', {
+                params: {
+                    start_date: startDate,
+                    end_date: endDate
+                }
+            });
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching employee attendance by date range:', error);
+            throw error;
+        }
+    },
+
+    // Time In employee
+    employeeTimeIn: async (rfidTagNumber: string) => {
+        try {
+            const response = await api.post('/employee/time-in', {
+                rfid_tag_number: rfidTagNumber
+            });
+            return response.data;
+        } catch (error) {
+            console.error('Error during employee time in:', error);
+            throw error;
+        }
+    },
+
+    // Time Out employee
+    employeeTimeOut: async (rfidTagNumber: string) => {
+        try {
+            const response = await api.post('/employee/time-out', {
+                rfid_tag_number: rfidTagNumber
+            });
+            return response.data;
+        } catch (error) {
+            console.error('Error during employee time out:', error);
+            throw error;
+        }
+    },
+
+    // Get today's employee attendance
+    getTodayEmployeeAttendance: async () => {
+        try {
+            const response = await api.get('/employee/attendance/today');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching today\'s employee attendance:', error);
+            throw error;
+        }
+    },
+
+    // Get employee attendance summary
+    getEmployeeAttendanceSummary: async (startDate?: string, endDate?: string) => {
+        try {
+            let url = '/employee/attendance/summary';
+            if (startDate && endDate) {
+                url += `?start_date=${startDate}&end_date=${endDate}`;
+            }
+            const response = await api.get(url);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching employee attendance summary:', error);
+            throw error;
+        }
+    }
+};
+
+// Employee Service - UPDATED WITH REQUEST DEDUPLICATION
+export const employeeService = {
+    // Cache for pending requests with status-specific keys
+    _requestCache: {} as Record<string, Promise<any>>,
+    _getEmployeeStatsPending: null as Promise<any> | null,
+    
+    // Get all employees with optional archive status filter
+    getAllEmployees: async (showArchived?: boolean) => {
+        try {
+            const cacheKey = `getAllEmployees_${showArchived ? 'archived' : 'active'}`;
+            
+            // If pending request exists for this status, return it
+            if (employeeService._requestCache[cacheKey]) {
+                return employeeService._requestCache[cacheKey];
+            }
+
+            const params = showArchived ? { archive_status: 'archived' } : { archive_status: 'active' };
+            const request = api.get('/employees', { params });
+            employeeService._requestCache[cacheKey] = request;
+            
+            const response = await request;
+            // Handle response from getEmployeeList controller { message, data: [...] }
+            const employeeData = response.data.data || response.data;
+            return Array.isArray(employeeData) ? employeeData : [];
+        } catch (error) {
+            console.error('Error fetching employees:', error);
+            return [];
+        } finally {
+            const cacheKey = `getAllEmployees_${showArchived ? 'archived' : 'active'}`;
+            delete employeeService._requestCache[cacheKey];
+        }
+    },
+
+    // Get active employees only (non-archived)
+    getActiveEmployees: async () => {
+        try {
+            const response = await api.get('/employee/active');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching active employees:', error);
+            throw error;
+        }
+    },
+
+    // Get archived employees only
+    getArchivedEmployees: async () => {
+        try {
+            const response = await api.get('/employee/archived');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching archived employees:', error);
+            throw error;
+        }
+    },
+
+    // Get employee by ID
+    getEmployeeById: async (id: number) => {
+        try {
+            const response = await api.get(`/employee/${id}`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error fetching employee ${id}:`, error);
+            throw error;
+        }
+    },
+
+    // Create new employee
+    createEmployee: async (employeeData: any) => {
+        try {
+            const response = await api.post('/employee/create', employeeData);
+            return response.data;
+        } catch (error) {
+            console.error('Error creating employee:', error);
+            throw error;
+        }
+    },
+
+    // Update employee
+    updateEmployee: async (id: number, employeeData: any) => {
+        try {
+            const response = await api.post(`/employee/update/${id}`, employeeData);
+            return response.data;
+        } catch (error) {
+            console.error(`Error updating employee ${id}:`, error);
+            throw error;
+        }
+    },
+
+    // Archive employee (soft delete)
+    archiveEmployee: async (id: number) => {
+        try {
+            const response = await api.post(`/employee/archive/${id}`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error archiving employee ${id}:`, error);
+            throw error;
+        }
+    },
+
+    // Restore archived employee
+    restoreEmployee: async (id: number) => {
+        try {
+            const response = await api.post(`/employee/${id}/restore`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error restoring employee ${id}:`, error);
+            throw error;
+        }
+    },
+
+    // Delete employee permanently (only for archived employees)
+    deleteEmployee: async (id: number) => {
+        try {
+            const response = await api.delete(`/employee/${id}`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error deleting employee ${id}:`, error);
+            throw error;
+        }
+    },
+
+    // Get employee statistics
+    getEmployeeStats: async () => {
+        try {
+            // Reuse pending request if one exists
+            if (employeeService._getEmployeeStatsPending) {
+                return employeeService._getEmployeeStatsPending;
+            }
+
+            employeeService._getEmployeeStatsPending = api.get('/employees/stats');
+            
+            const response = await employeeService._getEmployeeStatsPending;
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching employee stats:', error);
+            // Return fallback stats for development
+            return {
+                total_employees: 0,
+                active_employees: 0,
+                archived_employees: 0,
+                employees_by_department: {}
+            };
+        } finally {
+            employeeService._getEmployeeStatsPending = null;
+        }
+    },
+
+    // Search employees
+    searchEmployees: async (query: string) => {
+        try {
+            const response = await api.get(`/employees/search?q=${query}`);
+            return response.data;
+        } catch (error) {
+            console.error('Error searching employees:', error);
+            throw error;
+        }
+    },
+
+    // Clear cache for employees
+    clearCache: () => {
+        employeeService._requestCache = {};
+        employeeService._getEmployeeStatsPending = null;
+    }
+};
+
 // Export types that match your Laravel models
+export interface Employee {
+    id: number;
+    rfid_tag_number?: string | null;
+    employee_number: string;
+    first_name: string;
+    middle_name?: string | null;
+    last_name: string;
+    gender: string;
+    birthdate: string;
+    email: string;
+    contact_number: string;
+    department: string;
+    position: string;
+    employment_status: string;
+    is_active: boolean;
+    is_archived: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface Student {
     id: number;
     rfid_tag_number: string;
@@ -560,6 +868,18 @@ export interface VerificationResponse {
         first_name?: string;
         last_name?: string;
     };
+}
+
+export interface EmployeeAttendance {
+    id: number;
+    employee_number: string;
+    attendance_date: string;
+    time_in: string;
+    time_out: string | null;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    employee: Employee;
 }
 
 export default api;

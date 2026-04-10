@@ -1,14 +1,15 @@
-import { Routes, Route, Navigate, useLocation, Link } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Kiosk from "./pages/Kiosk";
-import StudentList from "./pages/Student";
+import Students from "./pages/Student";
+import Employees from "./pages/Employees";
 import Login from "./pages/Login";
 import Navbar from "./pages/Navbar";
+import Dashboard from "./pages/Dashboard";
 import { authService } from "@/services/api";
 import { FingerprintScanner } from "@/pages/FingerprintScanner";
 import Announcement from "@/pages/Announcement";
 import AttendanceList from "@/pages/AttendanceList";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { ScanLine, Megaphone, ClipboardList } from "lucide-react";
 
 // Main Layout with Navbar
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
@@ -72,7 +73,19 @@ function App() {
         element={
           <ProtectedRoute>
             <MainLayout>
-              <StudentList />
+              <Students />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Employee Management - Protected */}
+      <Route
+        path="/employees"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <Employees />
             </MainLayout>
           </ProtectedRoute>
         }
@@ -108,124 +121,7 @@ function App() {
         element={
           <ProtectedRoute>
             <MainLayout>
-              <div className="text-center py-6 md:py-10">
-                <div className="inline-flex items-center justify-center p-4 bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl mb-6">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="w-12 h-12 text-blue-600"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                    />
-                  </svg>
-                </div>
-                <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-                  Welcome to SAS Admin
-                </h1>
-                <p className="text-lg text-slate-600 mb-8 max-w-md mx-auto">
-                  Student Attendance System - Manage students and monitor
-                  attendance
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                  <Link
-                    to="/students"
-                    className="group p-6 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-blue-300 transition-all duration-300 text-left no-underline"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-blue-100 rounded-xl group-hover:bg-blue-200 transition-colors">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="w-6 h-6 text-blue-600"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-11.75A8.97 8.97 0 0012 4c-2.343 0-4.518.826-6.25 2.194"
-                          />
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-slate-900 mb-1">
-                          Manage Students
-                        </h3>
-                        <p className="text-sm text-slate-500">
-                          View, add, edit student records
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-
-                  <Link
-                    to="/kiosk"
-                    className="group p-6 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-purple-300 transition-all duration-300 text-left no-underline"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-purple-100 rounded-xl group-hover:bg-purple-200 transition-colors">
-                        <ScanLine className="w-6 h-6 text-purple-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-slate-900 mb-1">
-                          Kiosk Mode
-                        </h3>
-                        <p className="text-sm text-slate-500">
-                          Full-screen attendance scanner
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-
-                  {/* Future feature: Announcements */}
-                   <Link
-                    to="/announcements"
-                    className="group p-6 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-500 transition-all duration-300 text-left no-underline"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-slate-200 transition-colors">
-                        <Megaphone className="w-6 h-6 text-slate-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-slate-900 mb-1">
-                          Announcements
-                        </h3>
-                        <p className="text-sm text-slate-500">
-                          Manage announcements
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-
-                  {/* Future feature: Attendance */}
-                   <Link
-                    to="/attendance"
-                    className="group p-6 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-lime-500 transition-all duration-300 text-left no-underline"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-lime-100 rounded-xl group-hover:bg-lime-200 transition-colors">
-                        <ClipboardList className="w-6 h-6 text-lime-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-slate-900 mb-1">
-                          Attendance
-                        </h3>
-                        <p className="text-sm text-slate-500">
-                          Manage attendance records
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-              </div>
+              <Dashboard />
             </MainLayout>
           </ProtectedRoute>
         }
