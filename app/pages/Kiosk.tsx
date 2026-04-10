@@ -25,9 +25,8 @@ const Kiosk = () => {
   const [scannedStudent, setScannedStudent] = useState<ScannedStudent | null>(
     null,
   );
-  const [showScannedModal, setShowScannedModal] = useState(false);
-  const [showNotRegisteredModal, setShowNotRegisteredModal] = useState(false);
-  const [showWaitModal, setShowWaitModal] = useState(false);
+  const [activeModal, setActiveModal] = useState<"scanned" | "error" | "wait" | null>(null);
+  const [notRegisteredMessage, setNotRegisteredMessage] = useState("");
   const [waitMessage, setWaitMessage] = useState("");
   const [recentRecords, setRecentRecords] = useState<RecentRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(true);
@@ -36,10 +35,31 @@ const Kiosk = () => {
   const [announcements, setAnnouncements] = useState<string[]>([]);
   const [approachingMessage, setApproachingMessage] = useState("");
   const [errorTitle, setErrorTitle] = useState("Not Registered");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const modalTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Close all modals
+  const closeAllModals = () => {
+  if (modalTimeoutRef.current) {
+    clearTimeout(modalTimeoutRef.current);
+    modalTimeoutRef.current = null;
+  }
+
+  setActiveModal(null);
+  setApproachingMessage("");
+  setNotRegisteredMessage("");
+  setWaitMessage("");
+  setErrorTitle("Not Registered");
+  setIsProcessing(false);
+
+  // Refocus RFID input
+  setTimeout(() => {
+    inputRef.current?.focus();
+  }, 100);
+};
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -51,7 +71,10 @@ const Kiosk = () => {
       updateDateTime();
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+    };
   }, []);
 
   const updateDateTime = () => {
@@ -134,11 +157,16 @@ const Kiosk = () => {
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rfid.trim()) return;
+    if (!rfid.trim() || isProcessing) return;
+
+    setRfid("");
+    setIsProcessing(true);
 
     try {
       const result = await attendanceService.timeIn(rfid);
-      setRfid("");
+
+      // Set isProcessing to false immediately after API completes
+      setIsProcessing(false);
 
       const isSuccess =
         result?.isSuccess ||
@@ -173,17 +201,23 @@ const Kiosk = () => {
         }
 
         if (studentData) {
-          setScannedStudent(studentData);
-
-          // Check if student is within 5 minutes of checkout
-
-          setShowScannedModal(true);
-
+          // Close previous modal timeout if exists
           if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+          
+          // Clear all message states
+          setNotRegisteredMessage("");
+          setWaitMessage("");
+          setApproachingMessage("");
+          setErrorTitle("Not Registered");
+          
+          setScannedStudent(studentData);
+          setActiveModal("scanned");
+
+          // Set new timeout for modal closure only
           modalTimeoutRef.current = setTimeout(() => {
-            setShowScannedModal(false);
+            closeAllModals();
             inputRef.current?.focus();
-          }, 3000);
+          }, 1500);
         }
 
         await loadRecentRecords();
@@ -191,88 +225,96 @@ const Kiosk = () => {
         playSound("error");
         const errorMessage = result?.message || "Student not registered";
 
+        // Clear previous timeout
+        if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+
         // Check for 5-minute wait message
         if (errorMessage.toLowerCase().includes("please wait") && errorMessage.toLowerCase().includes("minute")) {
+          // Clear other message states
+          setNotRegisteredMessage("");
+          setApproachingMessage("");
+          
           setWaitMessage(errorMessage);
-          setShowWaitModal(true);
+          setActiveModal("wait");
 
-          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
           modalTimeoutRef.current = setTimeout(() => {
-            setShowWaitModal(false);
+            closeAllModals();
             inputRef.current?.focus();
-          }, 4000);
-        } else if (errorMessage.toLowerCase().includes("already timed in and out")) {
-          setErrorTitle("Attendance Completed");
-          setShowNotRegisteredModal(true);
-
-          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
-          modalTimeoutRef.current = setTimeout(() => {
-            setShowNotRegisteredModal(false);
-            inputRef.current?.focus();
-          }, 3000);
-        } else if (errorMessage.toLowerCase().includes("rfid")) {
-          setErrorTitle("RFID Not Recognized");
-          setShowNotRegisteredModal(true);
-
-          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
-          modalTimeoutRef.current = setTimeout(() => {
-            setShowNotRegisteredModal(false);
-            inputRef.current?.focus();
-          }, 3000);
+          }, 2500);
         } else {
-          setErrorTitle("Not Registered");
-          setShowNotRegisteredModal(true);
+          // Clear other message states
+          setWaitMessage("");
+          setApproachingMessage("");
+          
+          if (errorMessage.toLowerCase().includes("already timed in and out")) {
+            setErrorTitle("Attendance Completed");
+          } else if (errorMessage.toLowerCase().includes("rfid")) {
+            setErrorTitle("RFID Not Recognized");
+          } else {
+            setErrorTitle("Not Registered");
+          }
+          
+          setNotRegisteredMessage(errorMessage);
+          setActiveModal("error");
 
-          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
           modalTimeoutRef.current = setTimeout(() => {
-            setShowNotRegisteredModal(false);
+            closeAllModals();
             inputRef.current?.focus();
-          }, 3000);
+          }, 1500);
         }
       }
     } catch (error: any) {
       playSound("error");
       
+      // Set isProcessing to false immediately after API completes
+      setIsProcessing(false);
+      
       // Extract error message from various error response formats
       let errorMessage = "Student not registered";
       
       if (error.response?.data?.message) {
-        // Handle axios error with response message
         errorMessage = error.response.data.message;
       } else if (error.response?.data?.error) {
-        // Handle alternative error format
         errorMessage = error.response.data.error;
       } else if (error instanceof Error) {
         errorMessage = error.message;
       }
       
+      // Clear previous timeout
+      if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+
       // Check for 5-minute wait message
       if (errorMessage.toLowerCase().includes("please wait") && errorMessage.toLowerCase().includes("minute")) {
+        // Clear other message states
+        setNotRegisteredMessage("");
+        setApproachingMessage("");
+        
         setWaitMessage(errorMessage);
-        setShowWaitModal(true);
+        setActiveModal("wait");
 
-        if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
         modalTimeoutRef.current = setTimeout(() => {
-          setShowWaitModal(false);
+          closeAllModals();
           inputRef.current?.focus();
-        }, 4000);
+        }, 2500);
       } else {
-        // Set appropriate error title based on message
+        // Clear other message states
+        setWaitMessage("");
+        setApproachingMessage("");
+        
         if (errorMessage.toLowerCase().includes("rfid")) {
           setErrorTitle("RFID Not Recognized");
         } else {
           setErrorTitle("Not Registered");
         }
         
-        setShowNotRegisteredModal(true);
+        setNotRegisteredMessage(errorMessage);
+        setActiveModal("error");
 
-        if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
         modalTimeoutRef.current = setTimeout(() => {
-          setShowNotRegisteredModal(false);
+          closeAllModals();
           inputRef.current?.focus();
-        }, 3000);
+        }, 1500);
       }
-      setRfid("");
     }
   };
 
@@ -476,9 +518,9 @@ const Kiosk = () => {
 
       </div>
 
-      {/* MODAL */}
-      {showScannedModal && scannedStudent && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      {/* UNIFIED MODAL */}
+      {activeModal === "scanned" && scannedStudent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={closeAllModals}>
           <div className="bg-slate-900 p-10 rounded-3xl text-center">
             <h2 className="text-3xl text-white mb-2">
               {scannedStudent.first_name} {scannedStudent.last_name}
@@ -502,9 +544,8 @@ const Kiosk = () => {
         </div>
       )}
 
-      {/* WAIT 5 MINUTES MODAL */}
-      {showWaitModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
+      {activeModal === "wait" && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={closeAllModals}>
           <div className="bg-gradient-to-br from-amber-900/40 to-orange-900/40 border border-amber-400/50 p-12 rounded-3xl text-center shadow-2xl scale-in animate-in duration-300">
             <div className="mb-6 relative">
               <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 rounded-full blur-2xl"></div>
@@ -537,9 +578,8 @@ const Kiosk = () => {
         </div>
       )}
 
-      {/* NOT REGISTERED MODAL */}
-      {showNotRegisteredModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
+      {activeModal === "error" && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={closeAllModals}>
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-white/10 p-12 rounded-3xl text-center shadow-2xl scale-in animate-in duration-300">
             <div className="mb-6 relative">
               <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-full blur-2xl"></div>
@@ -574,7 +614,7 @@ const Kiosk = () => {
                   />
                 </svg>
                 <span className="text-lg font-semibold">
-                  Please contact the administrator
+                  {notRegisteredMessage || "Please contact the administrator"}
                 </span>
               </div>
             </div>
