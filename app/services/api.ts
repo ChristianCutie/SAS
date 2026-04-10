@@ -612,7 +612,7 @@ export const employeeService = {
             const cacheKey = `getAllEmployees_${showArchived ? 'archived' : 'active'}`;
             
             // If pending request exists for this status, return it
-            if (employeeService._requestCache[cacheKey]) {
+            if (await employeeService._requestCache[cacheKey]) {
                 return employeeService._requestCache[cacheKey];
             }
 
