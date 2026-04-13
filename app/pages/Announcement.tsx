@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { announcementService } from '../services/api';
 import {
   Table,
@@ -51,7 +50,7 @@ const Announcement = () => {
   const [toggleLoading, setToggleLoading] = useState<number | null>(null);
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
 
-  const API_BASE_URL = 'https://api-sas.slarenasitsolutions.com/public/api';
+  // const API_BASE_URL = 'https://api-sas.slarenasitsolutions.com/public/api';
 
   // Fetch announcements on component mount
   useEffect(() => {
