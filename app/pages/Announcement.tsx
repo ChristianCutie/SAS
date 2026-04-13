@@ -97,7 +97,17 @@ const Announcement = () => {
       setToggleLoading(id);
       const newStatus = currentStatus === 1 ? 0 : 1;
       
-      await announcementService.updateAnnouncement(id, { is_active: newStatus });
+      // Get the current announcement to preserve content
+      const currentAnnouncement = announcements.find(a => a.id === id);
+      if (!currentAnnouncement) {
+        setError('Announcement not found');
+        return;
+      }
+      
+      await announcementService.updateAnnouncement(id, { 
+        content: currentAnnouncement.content,
+        is_active: newStatus 
+      });
 
       // Update the announcement in the list
       setAnnouncements(announcements.map(announcement => 
