@@ -127,8 +127,8 @@ function App() {
         }
       />
 
-      {/* Redirect root to dashboard */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Redirect root to kiosk (startup page) */}
+      <Route path="/" element={<Navigate to="/kiosk" replace />} />
 
       {/* Catch all route - redirect to login */}
       <Route path="*" element={<Navigate to="/login" replace />} />

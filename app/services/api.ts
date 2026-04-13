@@ -376,10 +376,18 @@ export const attendanceService = {
         }
     },
 
-    // Get all attendance records
-    getAttendances: async () => {
+    // Get all attendance records with pagination and filters
+    getAttendances: async (params?: {
+        page?: number;
+        per_page?: number;
+        student_number?: string;
+        date?: string;
+        status?: string;
+        date_from?: string;
+        date_to?: string;
+    }) => {
         try {
-            const response = await api.get('/attendance');
+            const response = await api.get('/attendance', { params });
             return response.data;
         } catch (error) {
             console.error('Error fetching all attendance records:', error);

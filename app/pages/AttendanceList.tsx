@@ -98,6 +98,10 @@ const AttendanceList = () => {
     const [filterStatus, setFilterStatus] = useState<'all' | 'present' | 'absent' | 'late' | 'excused'>('all');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [perPage, setPerPage] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [lastPage, setLastPage] = useState(1);
     const [stats, setStats] = useState<AttendanceStats>({
         total_records: 0,
         present_count: 0,
@@ -107,12 +111,12 @@ const AttendanceList = () => {
     });
 
     useEffect(() => {
-        loadAttendanceRecords();
-    }, []);
+        setCurrentPage(1);
+    }, [searchTerm, filterStatus, startDate, endDate]);
 
     useEffect(() => {
-        loadStats();
-    }, [attendanceRecords]);
+        loadAttendanceRecords();
+    }, [currentPage, perPage, searchTerm, filterStatus, startDate, endDate]);
 
     const transformAttendanceData = (apiData: AttendanceRecord[]): TransformedRecord[] => {
         return apiData.map(record => ({
@@ -136,37 +140,41 @@ const AttendanceList = () => {
     const loadAttendanceRecords = async () => {
         try {
             setLoading(true);
-            // Fetch attendance records from backend API
-            const data = await attendanceService.getAttendances();
-            const transformedData = transformAttendanceData(data);
+            // Fetch attendance records with pagination and filters from backend API
+            const params = {
+                page: currentPage,
+                per_page: perPage,
+                ...(searchTerm && { student_number: searchTerm }),
+                ...(filterStatus !== 'all' && { status: filterStatus }),
+                ...(startDate && { date_from: startDate }),
+                ...(endDate && { date_to: endDate })
+            };
+            
+            const response = await attendanceService.getAttendances(params);
+            const transformedData = transformAttendanceData(response.data);
             setAttendanceRecords(transformedData);
+            
+            // Update pagination info from response
+            if (response.pagination) {
+                setTotalRecords(response.pagination.total);
+                setLastPage(response.pagination.last_page);
+                setCurrentPage(response.pagination.current_page);
+                setPerPage(response.pagination.per_page);
+            }
+
+            // Update stats with total count
+            setStats({
+                total_records: response.pagination?.total || 0,
+                present_count: 0,
+                absent_count: 0,
+                late_count: 0,
+                excused_count: 0
+            });
         } catch (error) {
             console.error('Failed to load attendance records:', error);
             setAttendanceRecords([]);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const loadStats = async () => {
-        try {
-            // Calculate stats from attendance records
-            if (attendanceRecords.length > 0) {
-                const present_count = attendanceRecords.filter(r => r.status === 'present').length;
-                const absent_count = attendanceRecords.filter(r => r.status === 'absent').length;
-                const late_count = attendanceRecords.filter(r => r.status === 'late').length;
-                const excused_count = attendanceRecords.filter(r => r.status === 'excused').length;
-                
-                setStats({
-                    total_records: attendanceRecords.length,
-                    present_count,
-                    absent_count,
-                    late_count,
-                    excused_count
-                });
-            }
-        } catch (error) {
-            console.error('Failed to load stats:', error);
         }
     };
 
@@ -185,13 +193,13 @@ const AttendanceList = () => {
     // };
 
     const exportToExcel = () => {
-        if (filteredRecords.length === 0) {
+        if (attendanceRecords.length === 0) {
             alert('No records to export');
             return;
         }
 
         // Prepare data for export
-        const dataToExport = filteredRecords.map(record => ({
+        const dataToExport = attendanceRecords.map(record => ({
             'Student Number': record.student_number,
             'Student Name': `${record.last_name}, ${record.first_name}`,
             'Date': new Date(record.attendance_date).toLocaleDateString(),
@@ -227,20 +235,7 @@ const AttendanceList = () => {
     };
 
     // Filter records based on search term, status, and date range
-    const filteredRecords = attendanceRecords.filter(record => {
-        const matchesSearch =
-            (record.first_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (record.last_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (record.student_number || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesStatus = filterStatus === 'all' || record.status === filterStatus;
-
-        const recordDate = new Date(record.attendance_date);
-        const matchesDateRange = (!startDate || recordDate >= new Date(startDate)) &&
-            (!endDate || recordDate <= new Date(endDate));
-
-        return matchesSearch && matchesStatus && matchesDateRange;
-    });
+    const filteredRecords = attendanceRecords;
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -271,7 +266,7 @@ const AttendanceList = () => {
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900">Attendance</h1>
                     <p className="text-slate-600">
-                        Monitor and manage student attendance records ({filteredRecords.length} records)
+                        Showing {attendanceRecords.length > 0 ? (currentPage - 1) * perPage + 1 : 0} to {Math.min(currentPage * perPage, totalRecords)} of {totalRecords} records
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -364,7 +359,7 @@ const AttendanceList = () => {
                                 <div className="relative">
                                     <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                                     <Input
-                                        placeholder="Search by student name, ID, or course..."
+                                        placeholder="Search by student number or name..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="pl-10"
@@ -379,8 +374,8 @@ const AttendanceList = () => {
                                 <Button 
                                     variant="outline"
                                     onClick={exportToExcel}
-                                    disabled={filteredRecords.length === 0}
-                                    title="Export records to Excel"
+                                    disabled={attendanceRecords.length === 0}
+                                    title="Export current page records to Excel"
                                 >
                                     <Download className="h-4 w-4" />
                                 </Button>
@@ -428,12 +423,40 @@ const AttendanceList = () => {
                                         setFilterStatus('all');
                                         setStartDate('');
                                         setEndDate('');
+                                        setCurrentPage(1);
                                     }}
                                 >
                                     Clear Filters
                                 </Button>
                             </div>
                         </div>
+
+                        {/* Active Filters Info */}
+                        {(searchTerm || filterStatus !== 'all' || startDate || endDate) && (
+                            <div className="flex flex-wrap gap-2 items-center p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                <span className="text-sm text-blue-900 font-medium">Active Filters:</span>
+                                {searchTerm && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        Student: {searchTerm}
+                                    </span>
+                                )}
+                                {filterStatus !== 'all' && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        Status: {filterStatus}
+                                    </span>
+                                )}
+                                {startDate && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        From: {new Date(startDate).toLocaleDateString()}
+                                    </span>
+                                )}
+                                {endDate && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        To: {new Date(endDate).toLocaleDateString()}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>
@@ -558,6 +581,74 @@ const AttendanceList = () => {
                         </div>
                     )}
                 </CardContent>
+                
+                {/* Pagination Controls */}
+                {attendanceRecords.length > 0 && (
+                    <div className="border-t border-slate-100 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-slate-600">Items per page:</label>
+                            <select
+                                value={perPage}
+                                onChange={(e) => {
+                                    setPerPage(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                                className="px-3 py-1 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value={5}>5</option>
+                                <option value={10}>10</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-600">
+                                Page {currentPage} of {lastPage}
+                            </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(1)}
+                                disabled={currentPage === 1 || loading}
+                                className="text-slate-600"
+                            >
+                                First
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(currentPage - 1)}
+                                disabled={currentPage === 1 || loading}
+                                className="text-slate-600"
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(currentPage + 1)}
+                                disabled={currentPage === lastPage || loading}
+                                className="text-slate-600"
+                            >
+                                Next
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(lastPage)}
+                                disabled={currentPage === lastPage || loading}
+                                className="text-slate-600"
+                            >
+                                Last
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </Card>
         </div>
     );

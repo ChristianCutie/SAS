@@ -13,6 +13,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Alert } from '../components/ui/alert';
+import Switch from '../components/ui/switch';
 import {
   Plus,
   Trash2,
@@ -28,6 +29,7 @@ interface Announcement {
   id: number;
   content: string;
   title?: string;
+  is_active: number;
   created_at: string;
   updated_at: string;
 }
@@ -45,6 +47,7 @@ const Announcement = () => {
     total_announcements: 0,
     today_announcements: 0,
   });
+  const [toggleLoading, setToggleLoading] = useState<number | null>(null);
 
   const API_BASE_URL = 'https://api-sas.slarenasitsolutions.com/public/api';
 
@@ -92,6 +95,41 @@ const Announcement = () => {
       total_announcements: data.length,
       today_announcements: todayCount,
     });
+  };
+
+  // Toggle announcement active status
+  const handleToggleActive = async (id: number, currentStatus: number) => {
+    try {
+      setToggleLoading(id);
+      const token = localStorage.getItem('auth_token');
+      const newStatus = currentStatus === 1 ? 0 : 1;
+      
+      await axios.patch(
+        `${API_BASE_URL}/announcements/${id}`,
+        { is_active: newStatus },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      // Update the announcement in the list
+      setAnnouncements(announcements.map(announcement => 
+        announcement.id === id 
+          ? { ...announcement, is_active: newStatus }
+          : announcement
+      ));
+      setSuccess('Announcement status updated successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      console.error('Error toggling announcement:', err);
+      setError(err.response?.data?.message || 'Failed to update announcement status.');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setToggleLoading(null);
+    }
   };
 
   // Create new announcement
@@ -353,6 +391,7 @@ const Announcement = () => {
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-semibold text-slate-700">Content</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Status</TableHead>
                     <TableHead className="font-semibold text-slate-700">Created Date</TableHead>
                     <TableHead className="font-semibold text-slate-700">Updated Date</TableHead>
                     <TableHead className="font-semibold text-slate-700 text-right">Actions</TableHead>
@@ -371,6 +410,15 @@ const Announcement = () => {
                               ? announcement.content.substring(0, 70) + '...' 
                               : announcement.content}
                           </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <Switch
+                            checked={announcement.is_active === 1}
+                            onCheckedChange={() => handleToggleActive(announcement.id, announcement.is_active)}
+                            disabled={toggleLoading === announcement.id}
+                          />
                         </div>
                       </TableCell>
                       <TableCell className="text-slate-600">

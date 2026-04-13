@@ -86,16 +86,27 @@ const Kiosk = () => {
     // Initialize inactivity timer
     resetInactivityTimer();
 
+    // Add keyboard listener for Ctrl+F12 to access login
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.key === 'F12') {
+        event.preventDefault();
+        navigate('/login');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+
     const interval = setInterval(() => {
       updateDateTime();
     }, 1000);
 
     return () => {
       clearInterval(interval);
+      window.removeEventListener('keydown', handleKeyPress);
       if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
       if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
     };
-  }, []);
+  }, [navigate]);
 
   const updateDateTime = () => {
     const now = new Date();
