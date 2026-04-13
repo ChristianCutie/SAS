@@ -522,6 +522,39 @@ export const announcementService = {
             console.error('Error fetching announcements:', error);
             throw error;
         }
+    },
+
+    // Create new announcement
+    createAnnouncement: async (content: string) => {
+        try {
+            const response = await api.post('/announcements', { content });
+            return response.data;
+        } catch (error) {
+            console.error('Error creating announcement:', error);
+            throw error;
+        }
+    },
+
+    // Update announcement (content and/or is_active status)
+    updateAnnouncement: async (id: number, data: { content?: string; is_active?: boolean | number }) => {
+        try {
+            const response = await api.post(`/announcements/update/${id}`, data);
+            return response.data;
+        } catch (error) {
+            console.error(`Error updating announcement ${id}:`, error);
+            throw error;
+        }
+    },
+
+    // Delete announcement
+    deleteAnnouncement: async (id: number) => {
+        try {
+            const response = await api.delete(`/announcements/${id}`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error deleting announcement ${id}:`, error);
+            throw error;
+        }
     }
 };
 

@@ -289,13 +289,15 @@ const Kiosk = () => {
         modalTimeoutRef.current = null;
       }
 
+      // Clear scannedStudent for error cases
+      setScannedStudent(null);
+
       if (
         errorMessage.toLowerCase().includes("please wait") &&
         errorMessage.toLowerCase().includes("minute")
       ) {
         setNotRegisteredMessage("");
         setApproachingMessage("");
-
         setWaitMessage(errorMessage);
         setActiveModal("wait");
 
@@ -342,6 +344,9 @@ const Kiosk = () => {
       modalTimeoutRef.current = null;
     }
 
+    // Clear scannedStudent for error cases
+    setScannedStudent(null);
+
     if (
       errorMessage.toLowerCase().includes("please wait") &&
       errorMessage.toLowerCase().includes("minute")
@@ -375,7 +380,7 @@ const Kiosk = () => {
       }, 1500);
     }
   } finally {
-    // ✅ ALWAYS reset processing here
+    // ALWAYS reset processing here
     setIsProcessing(false);
   }
 };

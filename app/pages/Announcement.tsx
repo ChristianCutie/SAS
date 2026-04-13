@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { announcementService } from '../services/api';
 import {
   Table,
   TableBody,
@@ -48,6 +49,7 @@ const Announcement = () => {
     today_announcements: 0,
   });
   const [toggleLoading, setToggleLoading] = useState<number | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
 
   const API_BASE_URL = 'https://api-sas.slarenasitsolutions.com/public/api';
 
@@ -62,16 +64,9 @@ const Announcement = () => {
       setFetchLoading(true);
       setError(null);
       
-      const token = localStorage.getItem('auth_token');
-      const response = await axios.get(`${API_BASE_URL}/announcements`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        }
-      });
-
-      setAnnouncements(response.data);
-      calculateStats(response.data);
+      const data = await announcementService.getAnnouncements();
+      setAnnouncements(data);
+      calculateStats(data);
     } catch (err: any) {
       console.error('Error fetching announcements:', err);
       setError('Failed to load announcements. Please try again.');
@@ -101,19 +96,9 @@ const Announcement = () => {
   const handleToggleActive = async (id: number, currentStatus: number) => {
     try {
       setToggleLoading(id);
-      const token = localStorage.getItem('auth_token');
       const newStatus = currentStatus === 1 ? 0 : 1;
       
-      await axios.patch(
-        `${API_BASE_URL}/announcements/${id}`,
-        { is_active: newStatus },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          }
-        }
-      );
+      await announcementService.updateAnnouncement(id, { is_active: newStatus });
 
       // Update the announcement in the list
       setAnnouncements(announcements.map(announcement => 
@@ -132,6 +117,29 @@ const Announcement = () => {
     }
   };
 
+  // Delete announcement
+  const handleDeleteAnnouncement = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this announcement?')) {
+      return;
+    }
+
+    try {
+      setDeleteLoading(id);
+      await announcementService.deleteAnnouncement(id);
+
+      // Remove from list
+      setAnnouncements(announcements.filter(announcement => announcement.id !== id));
+      setSuccess('Announcement deleted successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      console.error('Error deleting announcement:', err);
+      setError(err.response?.data?.message || 'Failed to delete announcement.');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setDeleteLoading(null);
+    }
+  };
+
   // Create new announcement
   const handleCreateAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,20 +154,10 @@ const Announcement = () => {
       setError(null);
       setSuccess(null);
 
-      const token = localStorage.getItem('auth_token');
-      const response = await axios.post(
-        `${API_BASE_URL}/announcements`,
-        { content },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          }
-        }
-      );
+      const response = await announcementService.createAnnouncement(content);
 
       // Add new announcement to list
-      setAnnouncements([response.data.data, ...announcements]);
+      setAnnouncements([response.data, ...announcements]);
       setContent('');
       setSuccess('Announcement created successfully!');
       
@@ -433,6 +431,8 @@ const Announcement = () => {
                             variant="outline"
                             size="sm"
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                            onClick={() => handleDeleteAnnouncement(announcement.id)}
+                            disabled={deleteLoading === announcement.id}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
