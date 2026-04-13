@@ -8,6 +8,8 @@ import {
     Calendar,
     AlertCircle,
     CheckCircle2,
+    User,
+    Hash,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -183,10 +185,10 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
     return (
         <div className="container mx-auto px-4 py-8 max-w-4xl">
             <Card className="border-slate-200 shadow-lg">
-                <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-teal-50">
+                <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-blue-50 to-purple-50">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg">
+                            <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg">
                                 <Briefcase className="w-5 h-5 text-white" />
                             </div>
                             <div>
@@ -232,7 +234,7 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                         {/* Employee Information Section */}
                         <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                                <Briefcase className="w-5 h-5 text-emerald-600" />
+                                <User className="w-5 h-5 text-blue-600" />
                                 Personal Information
                             </h3>
 
@@ -242,14 +244,18 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                                     <Label htmlFor="first_name" className="text-slate-700">
                                         First Name *
                                     </Label>
-                                    <Input
-                                        id="first_name"
-                                        name="first_name"
-                                        value={formData.first_name}
-                                        onChange={handleChange}
-                                        placeholder="Enter first name"
-                                        disabled={loading}
-                                    />
+                                    <div className="relative">
+                                        <User className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                                        <Input
+                                            id="first_name"
+                                            name="first_name"
+                                            value={formData.first_name}
+                                            onChange={handleChange}
+                                            placeholder="Enter first name"
+                                            className="pl-10"
+                                            disabled={loading}
+                                        />
+                                    </div>
                                     {errors.first_name && (
                                         <p className="text-sm text-red-600">{errors.first_name}</p>
                                     )}
@@ -299,7 +305,7 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                                         value={formData.gender}
                                         onChange={handleChange}
                                         disabled={loading}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="Male">Male</option>
                                         <option value="Female">Female</option>
@@ -313,7 +319,7 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                                         Birthdate *
                                     </Label>
                                     <div className="relative">
-                                        <Calendar className="absolute left-3 top-3 h-4 w-4 text-slate-400 pointer-events-none" />
+                                        <Calendar className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                                         <Input
                                             id="birthdate"
                                             type="date"
@@ -334,7 +340,7 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                         {/* Contact Information Section */}
                         <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                                <Phone className="w-5 h-5 text-emerald-600" />
+                                <Mail className="w-5 h-5 text-blue-600" />
                                 Contact Information
                             </h3>
 
@@ -389,7 +395,7 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                         {/* Employment Information Section */}
                         <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                                <Briefcase className="w-5 h-5 text-emerald-600" />
+                                <Briefcase className="w-5 h-5 text-blue-600" />
                                 Employment Information
                             </h3>
 
@@ -399,32 +405,21 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                                     <Label htmlFor="employee_number" className="text-slate-700">
                                         Employee Number *
                                     </Label>
-                                    <Input
-                                        id="employee_number"
-                                        name="employee_number"
-                                        value={formData.employee_number}
-                                        onChange={handleChange}
-                                        placeholder="e.g., EMP-2024-001"
-                                        disabled={loading || !!employee}
-                                    />
+                                    <div className="relative">
+                                        <Hash className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                                        <Input
+                                            id="employee_number"
+                                            name="employee_number"
+                                            value={formData.employee_number}
+                                            onChange={handleChange}
+                                            placeholder="e.g., EMP-2024-001"
+                                            className="pl-10"
+                                            disabled={loading || !!employee}
+                                        />
+                                    </div>
                                     {errors.employee_number && (
                                         <p className="text-sm text-red-600">{errors.employee_number}</p>
                                     )}
-                                </div>
-
-                                {/* RFID Tag Number */}
-                                <div className="space-y-2">
-                                    <Label htmlFor="rfid_tag_number" className="text-slate-700">
-                                        RFID Tag Number
-                                    </Label>
-                                    <Input
-                                        id="rfid_tag_number"
-                                        name="rfid_tag_number"
-                                        value={formData.rfid_tag_number}
-                                        onChange={handleChange}
-                                        placeholder="e.g., RFID-123456"
-                                        disabled={loading}
-                                    />
                                 </div>
 
                                 {/* Department */}
@@ -474,7 +469,7 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                                         value={formData.employment_status}
                                         onChange={handleChange}
                                         disabled={loading}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="Permanent">Permanent</option>
                                         <option value="Contract">Contract</option>
@@ -486,44 +481,97 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                                 {/* Active Status */}
                                 <div className="space-y-2">
                                     <Label htmlFor="is_active" className="text-slate-700">
-                                        Status
+                                        Employee Status
                                     </Label>
-                                    <select
-                                        id="is_active"
-                                        name="is_active"
-                                        value={formData.is_active ? '1' : '0'}
-                                        onChange={(e) => {
-                                            setFormData(prev => ({
+                                    <div className="flex items-center space-x-2 mt-2">
+                                        <input
+                                            type="checkbox"
+                                            id="is_active"
+                                            name="is_active"
+                                            checked={formData.is_active}
+                                            onChange={(e) => setFormData(prev => ({
                                                 ...prev,
-                                                is_active: e.target.value === '1'
-                                            }));
-                                        }}
-                                        disabled={loading}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                    >
-                                        <option value="1">Active</option>
-                                        <option value="0">Inactive</option>
-                                    </select>
+                                                is_active: e.target.checked
+                                            }))}
+                                            disabled={loading}
+                                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <Label
+                                            htmlFor="is_active"
+                                            className="text-slate-700 font-medium"
+                                        >
+                                            Active Employee
+                                        </Label>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Inactive employees cannot scan for attendance in kiosk mode
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Identification Information Section */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                                <Hash className="w-5 h-5 text-blue-600" />
+                                Identification Information
+                            </h3>
+
+                            <div className="grid grid-cols-1 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="rfid_tag_number" className="text-slate-700 font-semibold">
+                                        RFID Tag Number *
+                                        <span className="ml-2 text-xs font-normal text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                            Required for identification
+                                        </span>
+                                    </Label>
+                                    <Input
+                                        id="rfid_tag_number"
+                                        name="rfid_tag_number"
+                                        value={formData.rfid_tag_number}
+                                        onChange={handleChange}
+                                        placeholder="e.g., TAG-2024-001"
+                                        className=""
+                                        disabled={loading || !!employee}
+                                        maxLength={250}
+                                    />
+                                    {errors.rfid_tag_number && (
+                                        <p className="text-sm text-red-600">{errors.rfid_tag_number}</p>
+                                    )}
+                                    <p className="text-sm text-slate-500 mt-1">
+                                        Enter the unique RFID tag number assigned to this employee.
+                                    </p>
                                 </div>
                             </div>
                         </div>
                     </CardContent>
 
-                    <CardFooter className="border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                    <CardFooter className="border-t border-slate-100 p-6 flex justify-between">
                         <Button
+                            type="button"
                             variant="outline"
                             onClick={onClose}
                             disabled={loading}
+                            className="border-slate-300 hover:bg-slate-100"
                         >
                             Cancel
                         </Button>
                         <Button
-                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
-                            disabled={loading}
                             type="submit"
+                            disabled={loading}
+                            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white min-w-[120px]"
                         >
-                            <Save className="w-4 h-4 mr-2" />
-                            {loading ? 'Saving...' : 'Save Employee'}
+                            {loading ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    {employee ? 'Updating...' : 'Creating...'}
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="w-4 h-4 mr-2" />
+                                    {employee ? 'Update Employee' : 'Create Employee'}
+                                </>
+                            )}
                         </Button>
                     </CardFooter>
                 </form>

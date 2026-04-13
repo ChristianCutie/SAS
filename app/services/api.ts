@@ -365,11 +365,33 @@ export const attendanceService = {
         }
     },
 
-    // Get recent attendance records (latest 4)
+    // Get recent attendance records (latest 4 for both students and employees)
     getRecentAttendance: async () => {
         try {
             const response = await api.get('/attendance/recent');
-            return response.data;
+            const data = response.data;
+            
+            // Handle new format with separate students and employees arrays
+            if (data.students && data.employees) {
+                const combined = [
+                    ...data.students.map((record: any) => ({
+                        ...record,
+                        type: 'student'
+                    })),
+                    ...data.employees.map((record: any) => ({
+                        ...record,
+                        type: 'employee'
+                    }))
+                ];
+                
+                // Sort by created_at (most recent first)
+                return combined.sort((a: any, b: any) => 
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                ).slice(0, 8); // Return top 8 combined records
+            }
+            
+            // Fallback for old format
+            return data;
         } catch (error) {
             console.error('Error fetching recent attendance:', error);
             throw error;

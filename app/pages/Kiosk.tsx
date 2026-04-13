@@ -132,19 +132,41 @@ const Kiosk = () => {
 
       if (Array.isArray(response)) {
         const records: RecentRecord[] = response
-          .map((record: any) => ({
-            id: record.id,
-            first_name: record.student?.first_name || record.first_name || "",
-            last_name: record.student?.last_name || record.last_name || "",
+          .map((record: any) => {
+            let firstName = "";
+            let lastName = "";
+            let profilePictureUrl = null;
 
-            // FIX HERE
-            profile_picture_url:
-              record.profile_picture_url || record.student?.profile_picture || null,
+            // Handle student records
+            if (record.type === 'student') {
+              firstName = record.first_name || "";
+              lastName = record.last_name || "";
+              profilePictureUrl = record.profile_picture_url || null;
+            } 
+            // Handle employee records
+            else if (record.type === 'employee') {
+              // For employees, we might not have first/last names, so use a placeholder or empty
+              firstName = record.first_name || record.employee_number || "";
+              lastName = record.last_name || "";
+              profilePictureUrl = null; // Employees don't have profile pictures in this endpoint
+            }
+            // Fallback for old format
+            else {
+              firstName = record.student?.first_name || record.first_name || "";
+              lastName = record.student?.last_name || record.last_name || "";
+              profilePictureUrl = record.profile_picture_url || record.student?.profile_picture || null;
+            }
 
-            time_in: record.time_in || record.created_at,
-            time_out: record.time_out || undefined,
-          }))
-          // Sort by updated_at (most recent first)
+            return {
+              id: record.id,
+              first_name: firstName,
+              last_name: lastName,
+              profile_picture_url: profilePictureUrl,
+              time_in: record.time_in || record.created_at,
+              time_out: record.time_out || undefined,
+            };
+          })
+          // Already sorted by API, but sort again to be safe
           .sort((a, b) => {
             const timeA = new Date(a.time_out || a.time_in).getTime();
             const timeB = new Date(b.time_out || b.time_in).getTime();
@@ -184,141 +206,96 @@ const Kiosk = () => {
     audio.play().catch(() => { });
   };
 
-  const handleScan = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!rfid.trim() || isProcessing) return;
+ const handleScan = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!rfid.trim() || isProcessing) return;
 
-    setRfid("");
-    setIsProcessing(true);
+  setRfid("");
+  setIsProcessing(true);
 
-    try {
-      const result = await attendanceService.timeIn(rfid);
+  try {
+    const result = await attendanceService.timeIn(rfid);
 
-      // Set isProcessing to false immediately after API completes
-      setIsProcessing(false);
+    const isSuccess =
+      result?.isSuccess ||
+      result?.status === "success" ||
+      result?.success === true ||
+      !!result?.attendance;
 
-      const isSuccess =
-        result?.isSuccess ||
-        result?.status === "success" ||
-        result?.success === true ||
-        !!result?.attendance;
+    if (isSuccess && result?.attendance) {
+      playSound("success");
+      resetInactivityTimer();
 
-      if (isSuccess && result?.attendance) {
-        playSound("success");
-        resetInactivityTimer(); // Reset timer on successful tap
-        const attendance = result.attendance;
+      const attendance = result.attendance;
 
-        let studentData: ScannedStudent | null = null;
+      let studentData: ScannedStudent | null = null;
 
-        if (result?.message && result.message.toLowerCase().includes("5")) {
-          setApproachingMessage(result.message);
-        } else {
-          setApproachingMessage("");
-        }
-
-        if (result.student) {
-          studentData = {
-            first_name: result.student.first_name || "",
-            last_name: result.student.last_name || "",
-            time_in: attendance.time_in || new Date().toISOString(),
-          };
-        } else if (attendance.first_name && attendance.last_name) {
-          studentData = {
-            first_name: attendance.first_name || "",
-            last_name: attendance.last_name || "",
-            time_in: attendance.time_in || new Date().toISOString(),
-          };
-        }
-
-        if (studentData) {
-          // Close previous modal timeout if exists
-          if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
-          
-          // Clear all message states
-          setNotRegisteredMessage("");
-          setWaitMessage("");
-          setApproachingMessage("");
-          setErrorTitle("Not Registered");
-          
-          setScannedStudent(studentData);
-          setActiveModal("scanned");
-
-          // Set new timeout for modal closure only
-          modalTimeoutRef.current = setTimeout(() => {
-            closeAllModals();
-            inputRef.current?.focus();
-          }, 1500);
-        }
-
-        await loadRecentRecords();
+      // ✅ FIX: DO NOT overwrite later
+      if (result?.message && result.message.toLowerCase().includes("5")) {
+        setApproachingMessage(result.message);
       } else {
-        playSound("error");
-        const errorMessage = result?.message || "Student not registered";
+        setApproachingMessage("");
+      }
 
-        // Clear previous timeout
-        if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+      if (result.student) {
+        studentData = {
+          first_name: result.student.first_name || "",
+          last_name: result.student.last_name || "",
+          time_in: attendance.time_in || new Date().toISOString(),
+        };
+      } else if (attendance.first_name && attendance.last_name) {
+        studentData = {
+          first_name: attendance.first_name || "",
+          last_name: attendance.last_name || "",
+          time_in: attendance.time_in || new Date().toISOString(),
+        };
+      } else if (attendance.first_name || attendance.last_name || attendance.employee_number) {
+        // Fallback for employee records or incomplete data
+        studentData = {
+          first_name: attendance.first_name || attendance.employee_number || "",
+          last_name: attendance.last_name || "",
+          time_in: attendance.time_in || new Date().toISOString(),
+        };
+      }
 
-        // Check for 5-minute wait message
-        if (errorMessage.toLowerCase().includes("please wait") && errorMessage.toLowerCase().includes("minute")) {
-          // Clear other message states
-          setNotRegisteredMessage("");
-          setApproachingMessage("");
-          
-          setWaitMessage(errorMessage);
-          setActiveModal("wait");
-
-          modalTimeoutRef.current = setTimeout(() => {
-            closeAllModals();
-            inputRef.current?.focus();
-          }, 2500);
-        } else {
-          // Clear other message states
-          setWaitMessage("");
-          setApproachingMessage("");
-          
-          if (errorMessage.toLowerCase().includes("already timed in and out")) {
-            setErrorTitle("Attendance Completed");
-          } else if (errorMessage.toLowerCase().includes("rfid")) {
-            setErrorTitle("RFID Not Recognized");
-          } else {
-            setErrorTitle("Not Registered");
-          }
-          
-          setNotRegisteredMessage(errorMessage);
-          setActiveModal("error");
-
-          modalTimeoutRef.current = setTimeout(() => {
-            closeAllModals();
-            inputRef.current?.focus();
-          }, 1500);
+      if (studentData) {
+        // CLEAR old timeout completely
+        if (modalTimeoutRef.current) {
+          clearTimeout(modalTimeoutRef.current);
+          modalTimeoutRef.current = null;
         }
-      }
-    } catch (error: any) {
-      playSound("error");
-      
-      // Set isProcessing to false immediately after API completes
-      setIsProcessing(false);
-      
-      // Extract error message from various error response formats
-      let errorMessage = "Student not registered";
-      
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      
-      // Clear previous timeout
-      if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
 
-      // Check for 5-minute wait message
-      if (errorMessage.toLowerCase().includes("please wait") && errorMessage.toLowerCase().includes("minute")) {
-        // Clear other message states
+        // Clear other states (DO NOT clear approachingMessage here)
+        setNotRegisteredMessage("");
+        setWaitMessage("");
+        setErrorTitle("Not Registered");
+        setScannedStudent(studentData);
+        setActiveModal("scanned");
+
+        // Set timeout to close modal after 1500ms
+        modalTimeoutRef.current = setTimeout(() => {
+          closeAllModals();
+          inputRef.current?.focus();
+        }, 1500);
+      }
+
+      await loadRecentRecords();
+    } else {
+      playSound("error");
+      const errorMessage = result?.message || "Student not registered";
+
+      if (modalTimeoutRef.current) {
+        clearTimeout(modalTimeoutRef.current);
+        modalTimeoutRef.current = null;
+      }
+
+      if (
+        errorMessage.toLowerCase().includes("please wait") &&
+        errorMessage.toLowerCase().includes("minute")
+      ) {
         setNotRegisteredMessage("");
         setApproachingMessage("");
-        
+
         setWaitMessage(errorMessage);
         setActiveModal("wait");
 
@@ -327,16 +304,17 @@ const Kiosk = () => {
           inputRef.current?.focus();
         }, 2500);
       } else {
-        // Clear other message states
         setWaitMessage("");
         setApproachingMessage("");
-        
-        if (errorMessage.toLowerCase().includes("rfid")) {
+
+        if (errorMessage.toLowerCase().includes("already timed in and out")) {
+          setErrorTitle("Attendance Completed");
+        } else if (errorMessage.toLowerCase().includes("rfid")) {
           setErrorTitle("RFID Not Recognized");
         } else {
           setErrorTitle("Not Registered");
         }
-        
+
         setNotRegisteredMessage(errorMessage);
         setActiveModal("error");
 
@@ -346,7 +324,61 @@ const Kiosk = () => {
         }, 1500);
       }
     }
-  };
+  } catch (error: any) {
+    playSound("error");
+
+    let errorMessage = "Student not registered";
+
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.response?.data?.error) {
+      errorMessage = error.response.data.error;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
+    if (modalTimeoutRef.current) {
+      clearTimeout(modalTimeoutRef.current);
+      modalTimeoutRef.current = null;
+    }
+
+    if (
+      errorMessage.toLowerCase().includes("please wait") &&
+      errorMessage.toLowerCase().includes("minute")
+    ) {
+      setNotRegisteredMessage("");
+      setApproachingMessage("");
+
+      setWaitMessage(errorMessage);
+      setActiveModal("wait");
+
+      modalTimeoutRef.current = setTimeout(() => {
+        closeAllModals();
+        inputRef.current?.focus();
+      }, 2500);
+    } else {
+      setWaitMessage("");
+      setApproachingMessage("");
+
+      if (errorMessage.toLowerCase().includes("rfid")) {
+        setErrorTitle("RFID Not Recognized");
+      } else {
+        setErrorTitle("Not Registered");
+      }
+
+      setNotRegisteredMessage(errorMessage);
+      setActiveModal("error");
+
+      modalTimeoutRef.current = setTimeout(() => {
+        closeAllModals();
+        inputRef.current?.focus();
+      }, 1500);
+    }
+  } finally {
+    // ✅ ALWAYS reset processing here
+    setIsProcessing(false);
+  }
+};
 
   const formatTimeIn = (time: string | null) => {
     if (!time) return "N/A";
