@@ -1,7 +1,5 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
 import { attendanceService, announcementService } from "@/services/api";
 import "@/css/global.css";
 
@@ -390,13 +388,13 @@ const Kiosk = () => {
       </form>
 
       {/* EXIT BUTTON */}
-      <div className="absolute top-6 right-6 z-70">
+      {/* <div className="absolute top-6 right-6 z-70">
         <div className="opacity-0 hover:opacity-100 transition-opacity duration-300 ">
           <Button onClick={() => navigate("/dashboard")}>
             <ChevronLeft className="mr-2" /> Exit
           </Button>
         </div>
-      </div>
+      </div> */}
 
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-10">
@@ -552,17 +550,34 @@ const Kiosk = () => {
 
       {/* UNIFIED MODAL */}
       {activeModal === "scanned" && scannedStudent && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={closeAllModals}>
-          <div className="bg-slate-900 p-10 rounded-3xl text-center">
-            <h2 className="text-3xl text-white mb-2">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999]" onClick={closeAllModals}>
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-green-400/50 p-12 rounded-3xl text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-6 relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-full blur-2xl"></div>
+              <div className="flex items-center justify-center w-32 h-32 rounded-full mx-auto relative border-2 border-green-400/50 bg-green-500/10">
+                <svg
+                  className="w-16 h-16 text-green-400 animate-bounce"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+            </div>
+            <h2 className="text-4xl font-bold text-white mb-2">Success!</h2>
+            <h3 className="text-2xl text-white mb-4">
               {scannedStudent.first_name} {scannedStudent.last_name}
-            </h2>
+            </h3>
 
-            <p className="text-green-400 text-xl mb-2">
+            <p className="text-green-400 text-2xl font-bold mb-2">
               {formatTimeIn(scannedStudent.time_in)}
             </p>
 
-            <p className="text-white font-semibold">Attendance Recorded</p>
+            <p className="text-white font-semibold text-lg mb-2">Attendance Recorded</p>
 
             {/* 5 MINUTES APPROACHING MESSAGE */}
             {approachingMessage && (
@@ -577,8 +592,8 @@ const Kiosk = () => {
       )}
 
       {activeModal === "wait" && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={closeAllModals}>
-          <div className="bg-gradient-to-br from-amber-900/40 to-orange-900/40 border border-amber-400/50 p-12 rounded-3xl text-center shadow-2xl scale-in animate-in duration-300">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999]" onClick={closeAllModals}>
+          <div className="bg-gradient-to-br from-amber-900/40 to-orange-900/40 border border-amber-400/50 p-12 rounded-3xl text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-6 relative">
               <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 rounded-full blur-2xl"></div>
               <div className="flex items-center justify-center w-32 h-32 rounded-full mx-auto relative border-2 border-amber-400/50 bg-amber-500/10">
@@ -611,8 +626,8 @@ const Kiosk = () => {
       )}
 
       {activeModal === "error" && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={closeAllModals}>
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-white/10 p-12 rounded-3xl text-center shadow-2xl scale-in animate-in duration-300">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999]" onClick={closeAllModals}>
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-white/10 p-12 rounded-3xl text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-6 relative">
               <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-full blur-2xl"></div>
               <div className="flex items-center justify-center w-32 h-32 rounded-full mx-auto relative border-2 border-red-400/50 bg-red-500/10">

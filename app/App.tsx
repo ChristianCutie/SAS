@@ -15,8 +15,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
 
-  // Don't show navbar on login or kiosk pages
-  if (location.pathname === "/login" || location.pathname === "/kiosk") {
+  // Don't show navbar on login or root pages
+  if (location.pathname === "/login" || location.pathname === "/") {
     return <>{children}</>;
   }
 
@@ -47,9 +47,9 @@ function App() {
         }
       />
 
-      {/* Kiosk Mode - Full screen, no navbar */}
+      {/* Root/Index - Kiosk Mode - Full screen, no navbar */}
       <Route
-        path="/kiosk"
+        path="/"
         element={
           <div className="kiosk-mode">
             <Kiosk />
@@ -127,8 +127,7 @@ function App() {
         }
       />
 
-      {/* Redirect root to kiosk (startup page) */}
-      <Route path="/" element={<Navigate to="/kiosk" replace />} />
+
 
       {/* Catch all route - redirect to login */}
       <Route path="*" element={<Navigate to="/login" replace />} />

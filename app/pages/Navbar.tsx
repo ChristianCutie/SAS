@@ -33,7 +33,7 @@ const Navbar = () => {
 
     const navigation = [
         { name: 'Dashboard', href: '/dashboard', icon: Home },
-        { name: 'Kiosk', href: '/kiosk', icon: ScanLine },
+        // { name: 'Kiosk', href: '/kiosk', icon: ScanLine },
         { name: 'Students', href: '/students', icon: Users },
         { name: 'Employees', href: '/employees', icon: Briefcase },
         { name: 'Announcements', href: '/announcements', icon: Megaphone },

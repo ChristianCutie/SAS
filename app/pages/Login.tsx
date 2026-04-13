@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ScanLine, User, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
+import { ScanLine, User, Lock, Eye, EyeOff, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -137,6 +137,9 @@ const Login = () => {
                         >
                             {loading ? 'Signing in...' : 'Sign In'}
                         </Button>
+                        <Link to="/" className="text-sm text-center text-black-900 hover:text-black-500 transition-colors">
+                          <div className="flex items-center justify-center"><ArrowLeft className="h-3 w-3 mr-1" /> Back to Kiosk</div>
+                        </Link>
 
                         <div className="text-center text-sm text-gray-600 mt-6">
                             Don't have an account?{' '}
