@@ -525,9 +525,12 @@ export const announcementService = {
     },
 
     // Create new announcement
-    createAnnouncement: async (content: string) => {
+    createAnnouncement: async (content: string, is_active?: boolean) => {
         try {
-            const response = await api.post('/announcements', { content });
+            const response = await api.post('/announcements', { 
+                content,
+                is_active: is_active ? 1 : 0
+            });
             return response.data;
         } catch (error) {
             console.error('Error creating announcement:', error);

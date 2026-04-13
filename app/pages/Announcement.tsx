@@ -33,7 +33,6 @@ interface Announcement {
   created_at: string;
   updated_at: string;
 }
-
 const Announcement = () => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [content, setContent] = useState('');
@@ -45,10 +44,12 @@ const Announcement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [stats, setStats] = useState({
     total_announcements: 0,
-    today_announcements: 0,
+    active_announcements: 0,
+    inactive_announcements: 0,
   });
   const [toggleLoading, setToggleLoading] = useState<number | null>(null);
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
+  const [isActive, setIsActive] = useState(true);
 
   // const API_BASE_URL = 'https://api-sas.slarenasitsolutions.com/public/api';
 
@@ -76,18 +77,13 @@ const Announcement = () => {
 
   // Calculate statistics
   const calculateStats = (data: Announcement[]) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todayCount = data.filter((announcement) => {
-      const createdDate = new Date(announcement.created_at);
-      createdDate.setHours(0, 0, 0, 0);
-      return createdDate.getTime() === today.getTime();
-    }).length;
+    const activeCount = data.filter((announcement) => announcement.is_active === 1).length;
+    const inactiveCount = data.length - activeCount;
 
     setStats({
       total_announcements: data.length,
-      today_announcements: todayCount,
+      active_announcements: activeCount,
+      inactive_announcements: inactiveCount,
     });
   };
 
@@ -163,11 +159,12 @@ const Announcement = () => {
       setError(null);
       setSuccess(null);
 
-      const response = await announcementService.createAnnouncement(content);
+      const response = await announcementService.createAnnouncement(content, isActive);
 
       // Add new announcement to list
       setAnnouncements([response.data, ...announcements]);
       setContent('');
+      setIsActive(true);
       setSuccess('Announcement created successfully!');
       
       // Close modal
@@ -186,6 +183,7 @@ const Announcement = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setContent('');
+    setIsActive(true);
     setError(null);
   };
 
@@ -278,7 +276,7 @@ const Announcement = () => {
       </Card>
 
       {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -297,12 +295,26 @@ const Announcement = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-900">Today</p>
+                <p className="text-sm font-medium text-purple-900">Total Active</p>
                 <p className="text-2xl font-bold text-purple-700 mt-2">
-                  {stats.today_announcements}
+                  {stats.active_announcements}
                 </p>
               </div>
               <Bell className="h-10 w-10 text-purple-500 opacity-80" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-amber-900">Total Inactive</p>
+                <p className="text-2xl font-bold text-amber-700 mt-2">
+                  {stats.inactive_announcements}
+                </p>
+              </div>
+              <Bell className="h-10 w-10 text-amber-500 opacity-80" />
             </div>
           </CardContent>
         </Card>
@@ -339,6 +351,19 @@ const Announcement = () => {
                     disabled={loading}
                     autoFocus
                   />
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-4">
+                  <Label className="text-slate-700 font-medium">
+                    Is Active
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={isActive}
+                      onCheckedChange={setIsActive}
+                      disabled={loading}
+                    />
+                  </div>
                 </div>
 
                 {error && (
@@ -422,6 +447,7 @@ const Announcement = () => {
                       <TableCell>
                         <div className="flex items-center">
                           <Switch
+                            className="btn-sm"
                             checked={announcement.is_active === 1}
                             onCheckedChange={() => handleToggleActive(announcement.id, announcement.is_active)}
                             disabled={toggleLoading === announcement.id}
