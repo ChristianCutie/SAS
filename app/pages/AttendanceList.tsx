@@ -118,16 +118,33 @@ const AttendanceList = () => {
     const [attendanceRecords, setAttendanceRecords] = useState<TransformedRecord[]>([]);
     //const [recentStudentAttendance, setRecentStudentAttendance] = useState<RecentStudentAttendance[]>([]);
     const [recentEmployeeAttendance, setRecentEmployeeAttendance] = useState<RecentEmployeeAttendance[]>([]);
+    const [filteredEmployeeAttendance, setFilteredEmployeeAttendance] = useState<RecentEmployeeAttendance[]>([]);
     const [loading, setLoading] = useState(true);
+    
+    // Student filters
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'present' | 'absent' | 'late' | 'excused'>('all');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    
+    // Employee filters
+    const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+    const [employeeFilterStatus, setEmployeeFilterStatus] = useState<'all' | 'present' | 'absent' | 'late' | 'excused'>('all');
+    const [employeeStartDate, setEmployeeStartDate] = useState('');
+    const [employeeEndDate, setEmployeeEndDate] = useState('');
+    
     const [perPage, setPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalRecords, setTotalRecords] = useState(0);
     const [lastPage, setLastPage] = useState(1);
     const [stats, setStats] = useState<AttendanceStats>({
+        total_records: 0,
+        present_count: 0,
+        absent_count: 0,
+        late_count: 0,
+        excused_count: 0
+    });
+    const [employeeStats, setEmployeeStats] = useState<AttendanceStats>({
         total_records: 0,
         present_count: 0,
         absent_count: 0,
@@ -143,6 +160,10 @@ const AttendanceList = () => {
         loadAttendanceRecords();
         loadRecentAttendance();
     }, [currentPage, perPage, searchTerm, filterStatus, startDate, endDate]);
+
+    useEffect(() => {
+        filterEmployeeAttendance();
+    }, [recentEmployeeAttendance, employeeSearchTerm, employeeFilterStatus, employeeStartDate, employeeEndDate]);
 
     const transformAttendanceData = (apiData: AttendanceRecord[]): TransformedRecord[] => {
         return apiData.map(record => ({
@@ -161,6 +182,62 @@ const AttendanceList = () => {
             remarks: null,
             profile_picture: record.student.profile_picture
         }));
+    };
+
+    const filterEmployeeAttendance = () => {
+        let filtered = [...recentEmployeeAttendance];
+
+        // Filter by search term (employee number or name)
+        if (employeeSearchTerm) {
+            const searchLower = employeeSearchTerm.toLowerCase();
+            filtered = filtered.filter(record =>
+                record.employee_number.toLowerCase().includes(searchLower) ||
+                (record.employee?.first_name.toLowerCase().includes(searchLower)) ||
+                (record.employee?.last_name.toLowerCase().includes(searchLower))
+            );
+        }
+
+        // Filter by status
+        if (employeeFilterStatus !== 'all') {
+            filtered = filtered.filter(record => record.status.toLowerCase() === employeeFilterStatus);
+        }
+
+        // Filter by date range
+        if (employeeStartDate) {
+            filtered = filtered.filter(record => new Date(record.attendance_date) >= new Date(employeeStartDate));
+        }
+        if (employeeEndDate) {
+            filtered = filtered.filter(record => new Date(record.attendance_date) <= new Date(employeeEndDate));
+        }
+
+        setFilteredEmployeeAttendance(filtered);
+        calculateEmployeeStats(filtered);
+    };
+
+    const calculateEmployeeStats = (records: RecentEmployeeAttendance[]) => {
+        const stats: AttendanceStats = {
+            total_records: records.length,
+            present_count: records.filter(r => r.status.toLowerCase() === 'present').length,
+            absent_count: records.filter(r => r.status.toLowerCase() === 'absent').length,
+            late_count: records.filter(r => r.status.toLowerCase() === 'late').length,
+            excused_count: records.filter(r => r.status.toLowerCase() === 'excused').length
+        };
+        setEmployeeStats(stats);
+    };
+
+    const handleRefresh = async () => {
+        setLoading(true);
+        try {
+            if (activeTab === 'students') {
+                await loadAttendanceRecords();
+            } else {
+                await loadRecentAttendance();
+            }
+        } catch (error) {
+            console.error('Refresh failed:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const loadRecentAttendance = async () => {
@@ -339,7 +416,7 @@ const AttendanceList = () => {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" onClick={loadRecentAttendance} disabled={loading}>
+                    <Button variant="outline" onClick={handleRefresh} disabled={loading}>
                         <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
@@ -453,6 +530,81 @@ const AttendanceList = () => {
             </div>
             )}
 
+            {/* Stats Summary - For Employees */}
+            {activeTab === 'employees' && (
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
+                <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-slate-900">Total Records</p>
+                                <p className="text-2xl font-bold text-slate-700 mt-2">
+                                    {employeeStats.total_records}
+                                </p>
+                            </div>
+                            <Calendar className="h-10 w-10 text-slate-500 opacity-80" />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-emerald-900">Present</p>
+                                <p className="text-2xl font-bold text-emerald-700 mt-2">
+                                    {employeeStats.present_count}
+                                </p>
+                            </div>
+                            <CheckCircle className="h-10 w-10 text-emerald-500 opacity-80" />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-red-900">Absent</p>
+                                <p className="text-2xl font-bold text-red-700 mt-2">
+                                    {employeeStats.absent_count}
+                                </p>
+                            </div>
+                            <XCircle className="h-10 w-10 text-red-500 opacity-80" />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-amber-900">Late</p>
+                                <p className="text-2xl font-bold text-amber-700 mt-2">
+                                    {employeeStats.late_count}
+                                </p>
+                            </div>
+                            <Clock className="h-10 w-10 text-amber-500 opacity-80" />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-blue-900">Excused</p>
+                                <p className="text-2xl font-bold text-blue-700 mt-2">
+                                    {employeeStats.excused_count}
+                                </p>
+                            </div>
+                            <CheckCircle className="h-10 w-10 text-blue-500 opacity-80" />
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+            )}
+
             {/* Search and Filter Bar - Only for Students */}
             {activeTab === 'students' && (
             <Card className="border-slate-200">
@@ -557,6 +709,118 @@ const AttendanceList = () => {
                                 {endDate && (
                                     <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                                         To: {new Date(endDate).toLocaleDateString()}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+            )}
+
+            {/* Search and Filter Bar - For Employees */}
+            {activeTab === 'employees' && (
+            <Card className="border-slate-200">
+                <CardContent className="p-6">
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-2">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                                    <Input
+                                        placeholder="Search by employee number or name..."
+                                        value={employeeSearchTerm}
+                                        onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                                        className="pl-10"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <Button variant="outline" className="flex-1">
+                                    <Filter className="h-4 w-4 mr-2" />
+                                    More Filters
+                                </Button>
+                                <Button 
+                                    variant="outline"
+                                    onClick={exportToExcel}
+                                    disabled={filteredEmployeeAttendance.length === 0}
+                                    title="Export filtered records to Excel"
+                                >
+                                    <Download className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Status and Date Range Filters */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label className="text-sm font-medium text-slate-700 block mb-2">Status</label>
+                                <select
+                                    value={employeeFilterStatus}
+                                    onChange={(e) => setEmployeeFilterStatus(e.target.value as any)}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="all">All Status</option>
+                                    <option value="present">Present</option>
+                                    <option value="absent">Absent</option>
+                                    <option value="late">Late</option>
+                                    <option value="excused">Excused</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-slate-700 block mb-2">Start Date</label>
+                                <Input
+                                    type="date"
+                                    value={employeeStartDate}
+                                    onChange={(e) => setEmployeeStartDate(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-slate-700 block mb-2">End Date</label>
+                                <Input
+                                    type="date"
+                                    value={employeeEndDate}
+                                    onChange={(e) => setEmployeeEndDate(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex items-end">
+                                <Button 
+                                    variant="outline" 
+                                    className="w-full"
+                                    onClick={() => {
+                                        setEmployeeSearchTerm('');
+                                        setEmployeeFilterStatus('all');
+                                        setEmployeeStartDate('');
+                                        setEmployeeEndDate('');
+                                    }}
+                                >
+                                    Clear Filters
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Active Filters Info */}
+                        {(employeeSearchTerm || employeeFilterStatus !== 'all' || employeeStartDate || employeeEndDate) && (
+                            <div className="flex flex-wrap gap-2 items-center p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                <span className="text-sm text-blue-900 font-medium">Active Filters:</span>
+                                {employeeSearchTerm && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        Employee: {employeeSearchTerm}
+                                    </span>
+                                )}
+                                {employeeFilterStatus !== 'all' && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        Status: {employeeFilterStatus}
+                                    </span>
+                                )}
+                                {employeeStartDate && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        From: {new Date(employeeStartDate).toLocaleDateString()}
+                                    </span>
+                                )}
+                                {employeeEndDate && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        To: {new Date(employeeEndDate).toLocaleDateString()}
                                     </span>
                                 )}
                             </div>
@@ -770,11 +1034,15 @@ const AttendanceList = () => {
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                             <p className="mt-4 text-slate-500">Loading attendance records...</p>
                         </div>
-                    ) : recentEmployeeAttendance.length === 0 ? (
+                    ) : filteredEmployeeAttendance.length === 0 ? (
                         <div className="text-center py-12">
                             <Calendar className="h-16 w-16 text-slate-300 mx-auto mb-4" />
                             <h3 className="text-lg font-medium text-slate-900">No records found</h3>
-                            <p className="text-slate-500 mt-1">No recent employee attendance records available</p>
+                            <p className="text-slate-500 mt-1">
+                                {employeeSearchTerm || employeeFilterStatus !== 'all' || employeeStartDate || employeeEndDate
+                                    ? 'Try adjusting your filters'
+                                    : 'No recent employee attendance records available'}
+                            </p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -790,7 +1058,7 @@ const AttendanceList = () => {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {recentEmployeeAttendance.map((record) => (
+                                    {filteredEmployeeAttendance.map((record) => (
                                         <TableRow
                                             key={record.id}
                                             className="hover:bg-slate-50/50 transition-colors"
