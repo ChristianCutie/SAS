@@ -36,7 +36,7 @@ const EmployeeList = () => {
     const [showArchived, setShowArchived] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-    const [stats, setStats] = useState({
+    const [stats] = useState({
         total_employees: 0,
         active_employees: 0,
         archived_employees: 0,
@@ -47,7 +47,7 @@ const EmployeeList = () => {
         // Clear cache before loading to ensure fresh data
         employeeService.clearCache();
         loadEmployees();
-        loadStats();
+        //loadStats();
     }, [showArchived]);
 
     const loadEmployees = async () => {
@@ -69,14 +69,14 @@ const EmployeeList = () => {
         }
     };
 
-    const loadStats = async () => {
-        try {
-            const data = await employeeService.getEmployeeStats();
-            setStats(data);
-        } catch (error) {
-            console.error('Failed to load stats:', error);
-        }
-    };
+    // const loadStats = async () => {
+    //     try {
+    //         const data = await employeeService.getEmployeeStats();
+    //         setStats(data);
+    //     } catch (error) {
+    //         console.error('Failed to load stats:', error);
+    //     }
+    // };
 
     const handleArchive = async (id: number, employeeName: string) => {
         if (window.confirm(`Are you sure you want to archive ${employeeName}?`)) {
@@ -84,7 +84,7 @@ const EmployeeList = () => {
                 await employeeService.archiveEmployee(id);
                 alert('Employee archived successfully');
                 loadEmployees();
-                loadStats();
+                //loadStats();
             } catch (error) {
                 alert('Failed to archive employee');
                 console.error('Archive error:', error);
@@ -98,7 +98,7 @@ const EmployeeList = () => {
                 await employeeService.restoreEmployee(id);
                 alert('Employee restored successfully');
                 loadEmployees();
-                loadStats();
+                //loadStats();
             } catch (error) {
                 alert('Failed to restore employee');
                 console.error('Restore error:', error);
@@ -112,7 +112,7 @@ const EmployeeList = () => {
                 await employeeService.deleteEmployee(id);
                 alert('Employee deleted successfully');
                 loadEmployees();
-                loadStats();
+               // loadStats();
             } catch (error) {
                 alert('Failed to delete employee');
                 console.error('Delete error:', error);
@@ -139,7 +139,7 @@ const EmployeeList = () => {
         setShowForm(false);
         setEditingEmployee(null);
         loadEmployees();
-        loadStats();
+       // loadStats();
     };
 
     const exportToExcel = () => {

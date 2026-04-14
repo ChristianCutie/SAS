@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { attendanceService, announcementService } from "@/services/api";
+import { CircleCheck, Clock, CircleAlert } from "lucide-react";
 import "@/css/global.css";
 
 interface ScannedStudent {
@@ -475,37 +476,37 @@ const Kiosk = () => {
     return `https://api-sas.slarenasitsolutions.com/public/${cleanPath}`;
   };
 
-  const handleCardClick = (record: RecentRecord) => {
-    console.log("Card clicked:", record);
-    if (!record || !record.first_name) {
-      console.warn("Invalid record data for card click");
-      return;
-    }
+  // const handleCardClick = (record: RecentRecord) => {
+  //   console.log("Card clicked:", record);
+  //   if (!record || !record.first_name) {
+  //     console.warn("Invalid record data for card click");
+  //     return;
+  //   }
 
-    const studentData: ScannedStudent = {
-      first_name: record.first_name || "",
-      last_name: record.last_name || "",
-      time_in: record.time_in || new Date().toISOString(),
-    };
+  //   const studentData: ScannedStudent = {
+  //     first_name: record.first_name || "",
+  //     last_name: record.last_name || "",
+  //     time_in: record.time_in || new Date().toISOString(),
+  //   };
 
-    if (modalTimeoutRef.current) {
-      clearTimeout(modalTimeoutRef.current);
-      modalTimeoutRef.current = null;
-    }
+  //   if (modalTimeoutRef.current) {
+  //     clearTimeout(modalTimeoutRef.current);
+  //     modalTimeoutRef.current = null;
+  //   }
 
-    setNotRegisteredMessage("");
-    setWaitMessage("");
-    setErrorTitle("Not Registered");
-    setApproachingMessage("");
-    setIsProcessing(false);
-    setScannedStudent(studentData);
-    setActiveModal("scanned");
+  //   setNotRegisteredMessage("");
+  //   setWaitMessage("");
+  //   setErrorTitle("Not Registered");
+  //   setApproachingMessage("");
+  //   setIsProcessing(false);
+  //   setScannedStudent(studentData);
+  //   setActiveModal("scanned");
 
-    modalTimeoutRef.current = setTimeout(() => {
-      closeAllModals();
-      inputRef.current?.focus();
-    }, 1500);
-  };
+  //   modalTimeoutRef.current = setTimeout(() => {
+  //     closeAllModals();
+  //     inputRef.current?.focus();
+  //   }, 1500);
+  // };
 
   return (
     <div className="w-screen h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-6 flex flex-col overflow-hidden relative">
@@ -562,7 +563,7 @@ const Kiosk = () => {
               return (
                 <div
                   key={index}
-                  onClick={() => record && handleCardClick(record)}
+                  // onClick={() => record && handleCardClick(record)}
                   className="bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl hover:shadow-3xl flex items-start justify-start p-10 transition-all duration-300 hover:border-white/20 hover:bg-gradient-to-br hover:from-white/20 hover:to-white/10 cursor-pointer"
                 >
                   {loadingRecords ? (
@@ -672,17 +673,7 @@ const Kiosk = () => {
             <div className="mb-6 relative">
               <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-full blur-2xl"></div>
               <div className="flex items-center justify-center w-32 h-32 rounded-full mx-auto relative border-2 border-green-400/50 bg-green-500/10">
-                <svg
-                  className="w-16 h-16 text-green-400 animate-bounce"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+                <CircleCheck className="w-16 h-16 text-green-400" />
               </div>
             </div>
             <h2 className="text-4xl font-bold text-white mb-2">Success!</h2>
@@ -713,19 +704,7 @@ const Kiosk = () => {
             <div className="mb-6 relative">
               <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 rounded-full blur-2xl"></div>
               <div className="flex items-center justify-center w-32 h-32 rounded-full mx-auto relative border-2 border-amber-400/50 bg-amber-500/10">
-                <svg
-                  className="w-16 h-16 text-amber-400 animate-bounce"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
+                <Clock className="w-16 h-16 text-amber-400" />
               </div>
             </div>
             <h2 className="text-4xl font-bold text-white mb-4">Please Wait</h2>
@@ -747,19 +726,7 @@ const Kiosk = () => {
             <div className="mb-6 relative">
               <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-full blur-2xl"></div>
               <div className="flex items-center justify-center w-32 h-32 rounded-full mx-auto relative border-2 border-red-400/50 bg-red-500/10">
-                <svg
-                  className="w-16 h-16 text-red-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4v2m0-12a9 9 0 110 18 9 9 0 010-18zm0 0a9 9 0 110 18 9 9 0 010-18z"
-                  />
-                </svg>
+                <CircleAlert className="w-16 h-16 text-red-400" />
               </div>
             </div>
             <h2 className="text-4xl font-bold text-white mb-4">{errorTitle}</h2>
