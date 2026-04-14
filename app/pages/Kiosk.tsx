@@ -43,12 +43,9 @@ const Kiosk = () => {
 
   // Reset inactivity timeout
   const resetInactivityTimer = () => {
-    // Clear existing timeout
     if (inactivityTimeoutRef.current) {
       clearTimeout(inactivityTimeoutRef.current);
     }
-
-    // Set new timeout for 2 minutes (120000 ms)
     setShowWelcome(false);
     inactivityTimeoutRef.current = setTimeout(() => {
       setShowWelcome(true);
@@ -57,23 +54,22 @@ const Kiosk = () => {
 
   // Close all modals
   const closeAllModals = () => {
-  if (modalTimeoutRef.current) {
-    clearTimeout(modalTimeoutRef.current);
-    modalTimeoutRef.current = null;
-  }
+    if (modalTimeoutRef.current) {
+      clearTimeout(modalTimeoutRef.current);
+      modalTimeoutRef.current = null;
+    }
 
-  setActiveModal(null);
-  setApproachingMessage("");
-  setNotRegisteredMessage("");
-  setWaitMessage("");
-  setErrorTitle("Not Registered");
-  setIsProcessing(false);
+    setActiveModal(null);
+    setApproachingMessage("");
+    setNotRegisteredMessage("");
+    setWaitMessage("");
+    setErrorTitle("Not Registered");
+    setIsProcessing(false);
 
-  // Refocus RFID input
-  setTimeout(() => {
-    inputRef.current?.focus();
-  }, 100);
-};
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+  };
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -81,10 +77,8 @@ const Kiosk = () => {
     loadRecentRecords();
     loadAnnouncements();
 
-    // Initialize inactivity timer
     resetInactivityTimer();
 
-    // Request fullscreen mode when component mounts
     const requestFullscreen = async () => {
       try {
         const elem = document.documentElement;
@@ -104,12 +98,9 @@ const Kiosk = () => {
 
     requestFullscreen();
 
-    // Add keyboard listener for Ctrl+F12 to access login and F11 to toggle fullscreen
     const handleKeyPress = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key === 'F12') {
         event.preventDefault();
-        
-        // Exit fullscreen before navigating
         if (document.fullscreenElement) {
           document.exitFullscreen().then(() => {
             navigate('/login');
@@ -118,7 +109,6 @@ const Kiosk = () => {
           navigate('/login');
         }
       }
-      // F11 to toggle fullscreen manually
       if (event.key === 'F11') {
         event.preventDefault();
         if (document.fullscreenElement) {
@@ -140,8 +130,6 @@ const Kiosk = () => {
       window.removeEventListener('keydown', handleKeyPress);
       if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
       if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
-      
-      // Exit fullscreen when leaving the page
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
@@ -179,21 +167,15 @@ const Kiosk = () => {
             let lastName = "";
             let profilePictureUrl = null;
 
-            // Handle student records
             if (record.type === 'student') {
               firstName = record.first_name || "";
               lastName = record.last_name || "";
               profilePictureUrl = record.profile_picture_url || null;
-            } 
-            // Handle employee records
-            else if (record.type === 'employee') {
-              // For employees, we might not have first/last names, so use a placeholder or empty
+            } else if (record.type === 'employee') {
               firstName = record.first_name || record.employee_number || "";
               lastName = record.last_name || "";
-              profilePictureUrl = null; // Employees don't have profile pictures in this endpoint
-            }
-            // Fallback for old format
-            else {
+              profilePictureUrl = null;
+            } else {
               firstName = record.student?.first_name || record.first_name || "";
               lastName = record.student?.last_name || record.last_name || "";
               profilePictureUrl = record.profile_picture_url || record.student?.profile_picture || null;
@@ -208,11 +190,10 @@ const Kiosk = () => {
               time_out: record.time_out || undefined,
             };
           })
-          // Already sorted by API, but sort again to be safe
           .sort((a, b) => {
             const timeA = new Date(a.time_out || a.time_in).getTime();
             const timeB = new Date(b.time_out || b.time_in).getTime();
-            return timeB - timeA; // Most recent first
+            return timeB - timeA;
           });
         setRecentRecords(records);
       }
@@ -248,106 +229,199 @@ const Kiosk = () => {
     audio.play().catch(() => { });
   };
 
- const handleScan = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!rfid.trim() || isProcessing) return;
+  const handleScan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rfid.trim() || isProcessing) return;
 
-  setRfid("");
-  setIsProcessing(true);
+    setRfid("");
+    setIsProcessing(true);
 
-  try {
-    const result = await attendanceService.timeIn(rfid);
-    console.log("RFID Scan Result:", result);
+    try {
+      const result = await attendanceService.timeIn(rfid);
+      console.log("RFID Scan Result:", result);
 
-    const isSuccess =
-      result?.isSuccess ||
-      result?.status === "success" ||
-      result?.success === true ||
-      !!result?.attendance;
+      const isSuccess =
+        result?.isSuccess ||
+        result?.status === "success" ||
+        result?.success === true ||
+        !!result?.attendance;
 
-    // Check if we have attendance data - for both students and employees
-    const hasAttendance = !!result?.attendance || (result?.student) || (result?.employee);
-    
-    if (isSuccess && hasAttendance) {
-      playSound("success");
-      resetInactivityTimer();
+      const hasAttendance = !!result?.attendance || result?.student || result?.employee;
 
-      const attendance = result.attendance;
+      if (isSuccess && hasAttendance) {
+        playSound("success");
+        resetInactivityTimer();
 
-      let studentData: ScannedStudent | null = null;
+        const attendance = result.attendance;
 
-      // ✅ FIX: DO NOT overwrite later
-      if (result?.message && result.message.toLowerCase().includes("5")) {
-        setApproachingMessage(result.message);
+        // Keep approaching message if present
+        if (result?.message && result.message.toLowerCase().includes("5")) {
+          setApproachingMessage(result.message);
+        } else {
+          setApproachingMessage("");
+        }
+
+        // --- FIXED: Robust extraction for both student and employee ---
+        let studentData: ScannedStudent | null = null;
+
+        // Determine type from response or attendance
+        const type = result.type || attendance?.type;
+
+        // 1. Direct student object
+        if (result.student) {
+          studentData = {
+            first_name: result.student.first_name || "",
+            last_name: result.student.last_name || "",
+            time_in: attendance?.time_in || result.student.time_in || new Date().toISOString(),
+          };
+        }
+        // 2. Direct employee object
+        else if (result.employee) {
+          studentData = {
+            first_name: result.employee.first_name || result.employee.employee_number || "",
+            last_name: result.employee.last_name || "",
+            time_in: attendance?.time_in || result.employee.time_in || new Date().toISOString(),
+          };
+        }
+        // 3. Attendance contains student/employee data
+        else if (attendance) {
+          if (type === "student" || attendance.student) {
+            const student = attendance.student || attendance;
+            studentData = {
+              first_name: student.first_name || "",
+              last_name: student.last_name || "",
+              time_in: attendance.time_in || new Date().toISOString(),
+            };
+          } else if (type === "employee" || attendance.employee) {
+            const employee = attendance.employee || attendance;
+            studentData = {
+              first_name: employee.first_name || employee.employee_number || "",
+              last_name: employee.last_name || "",
+              time_in: attendance.time_in || new Date().toISOString(),
+            };
+          } else {
+            // Fallback: check for any name fields
+            const firstName = attendance.first_name || attendance.employee_number || "";
+            const lastName = attendance.last_name || "";
+            if (firstName || lastName) {
+              studentData = {
+                first_name: firstName,
+                last_name: lastName,
+                time_in: attendance.time_in || new Date().toISOString(),
+              };
+            }
+          }
+        }
+        // 4. Last resort: data is directly on result
+        else if (result.first_name || result.employee_number) {
+          studentData = {
+            first_name: result.first_name || result.employee_number || "",
+            last_name: result.last_name || "",
+            time_in: result.time_in || new Date().toISOString(),
+          };
+        }
+
+        // Show modal if we have at least one name field
+        if (studentData && (studentData.first_name || studentData.last_name)) {
+          if (modalTimeoutRef.current) {
+            clearTimeout(modalTimeoutRef.current);
+            modalTimeoutRef.current = null;
+          }
+
+          setNotRegisteredMessage("");
+          setWaitMessage("");
+          setErrorTitle("Not Registered");
+          setScannedStudent(studentData);
+          setActiveModal("scanned");
+
+          console.log("Modal shown for:", studentData.first_name, studentData.last_name);
+
+          modalTimeoutRef.current = setTimeout(() => {
+            closeAllModals();
+            inputRef.current?.focus();
+          }, 1500);
+        } else {
+          // If we can't extract a name, show a generic success (or treat as error)
+          console.warn("Success response but missing name data:", result);
+          // Fallback: show success with placeholder
+          setScannedStudent({
+            first_name: "User",
+            last_name: "",
+            time_in: new Date().toISOString(),
+          });
+          setActiveModal("scanned");
+          modalTimeoutRef.current = setTimeout(() => {
+            closeAllModals();
+            inputRef.current?.focus();
+          }, 1500);
+        }
+
+        await loadRecentRecords();
       } else {
-        setApproachingMessage("");
-      }
+        // Error handling remains the same
+        playSound("error");
+        const errorMessage = result?.message || "Student not registered";
 
-      // Try to get student data from different possible response structures
-      if (result.student) {
-        // Student object exists in response
-        studentData = {
-          first_name: result.student.first_name || "",
-          last_name: result.student.last_name || "",
-          time_in: attendance?.time_in || result.student.time_in || new Date().toISOString(),
-        };
-      } else if (result.employee) {
-        // Employee object exists in response
-        studentData = {
-          first_name: result.employee.first_name || result.employee.employee_number || "",
-          last_name: result.employee.last_name || "",
-          time_in: attendance?.time_in || result.employee.time_in || new Date().toISOString(),
-        };
-      } else if (attendance?.first_name && attendance?.last_name) {
-        // Data in attendance object
-        studentData = {
-          first_name: attendance.first_name || "",
-          last_name: attendance.last_name || "",
-          time_in: attendance.time_in || new Date().toISOString(),
-        };
-      } else if (attendance?.first_name || attendance?.last_name || attendance?.employee_number) {
-        // Fallback for employee records or incomplete data
-        studentData = {
-          first_name: attendance.first_name || attendance.employee_number || "",
-          last_name: attendance.last_name || "",
-          time_in: attendance.time_in || new Date().toISOString(),
-        };
-      }
-
-      if (studentData && (studentData.first_name || studentData.last_name)) {
-        // CLEAR old timeout completely
         if (modalTimeoutRef.current) {
           clearTimeout(modalTimeoutRef.current);
           modalTimeoutRef.current = null;
         }
 
-        // Clear other states (DO NOT clear approachingMessage here)
-        setNotRegisteredMessage("");
-        setWaitMessage("");
-        setErrorTitle("Not Registered");
-        setScannedStudent(studentData);
-        setActiveModal("scanned");
+        setScannedStudent(null);
 
-        console.log("Modal shown for:", studentData.first_name, studentData.last_name);
+        if (
+          errorMessage.toLowerCase().includes("please wait") &&
+          errorMessage.toLowerCase().includes("minute")
+        ) {
+          setNotRegisteredMessage("");
+          setApproachingMessage("");
+          setWaitMessage(errorMessage);
+          setActiveModal("wait");
 
-        // Set timeout to close modal after 1500ms
-        modalTimeoutRef.current = setTimeout(() => {
-          closeAllModals();
-          inputRef.current?.focus();
-        }, 1500);
+          modalTimeoutRef.current = setTimeout(() => {
+            closeAllModals();
+            inputRef.current?.focus();
+          }, 2500);
+        } else {
+          setWaitMessage("");
+          setApproachingMessage("");
+
+          if (errorMessage.toLowerCase().includes("already timed in and out")) {
+            setErrorTitle("Attendance Completed");
+          } else if (errorMessage.toLowerCase().includes("rfid")) {
+            setErrorTitle("RFID Not Recognized");
+          } else {
+            setErrorTitle("Not Registered");
+          }
+
+          setNotRegisteredMessage(errorMessage);
+          setActiveModal("error");
+
+          modalTimeoutRef.current = setTimeout(() => {
+            closeAllModals();
+            inputRef.current?.focus();
+          }, 1500);
+        }
       }
-
-      await loadRecentRecords();
-    } else {
+    } catch (error: any) {
+      console.error("RFID Scan Error:", error);
       playSound("error");
-      const errorMessage = result?.message || "Student not registered";
+
+      let errorMessage = "Student not registered";
+
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
 
       if (modalTimeoutRef.current) {
         clearTimeout(modalTimeoutRef.current);
         modalTimeoutRef.current = null;
       }
 
-      // Clear scannedStudent for error cases
       setScannedStudent(null);
 
       if (
@@ -367,9 +441,7 @@ const Kiosk = () => {
         setWaitMessage("");
         setApproachingMessage("");
 
-        if (errorMessage.toLowerCase().includes("already timed in and out")) {
-          setErrorTitle("Attendance Completed");
-        } else if (errorMessage.toLowerCase().includes("rfid")) {
+        if (errorMessage.toLowerCase().includes("rfid")) {
           setErrorTitle("RFID Not Recognized");
         } else {
           setErrorTitle("Not Registered");
@@ -383,66 +455,10 @@ const Kiosk = () => {
           inputRef.current?.focus();
         }, 1500);
       }
+    } finally {
+      setIsProcessing(false);
     }
-  } catch (error: any) {
-    console.error("RFID Scan Error:", error);
-    playSound("error");
-
-    let errorMessage = "Student not registered";
-
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.response?.data?.error) {
-      errorMessage = error.response.data.error;
-    } else if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-
-    if (modalTimeoutRef.current) {
-      clearTimeout(modalTimeoutRef.current);
-      modalTimeoutRef.current = null;
-    }
-
-    // Clear scannedStudent for error cases
-    setScannedStudent(null);
-
-    if (
-      errorMessage.toLowerCase().includes("please wait") &&
-      errorMessage.toLowerCase().includes("minute")
-    ) {
-      setNotRegisteredMessage("");
-      setApproachingMessage("");
-
-      setWaitMessage(errorMessage);
-      setActiveModal("wait");
-
-      modalTimeoutRef.current = setTimeout(() => {
-        closeAllModals();
-        inputRef.current?.focus();
-      }, 2500);
-    } else {
-      setWaitMessage("");
-      setApproachingMessage("");
-
-      if (errorMessage.toLowerCase().includes("rfid")) {
-        setErrorTitle("RFID Not Recognized");
-      } else {
-        setErrorTitle("Not Registered");
-      }
-
-      setNotRegisteredMessage(errorMessage);
-      setActiveModal("error");
-
-      modalTimeoutRef.current = setTimeout(() => {
-        closeAllModals();
-        inputRef.current?.focus();
-      }, 1500);
-    }
-  } finally {
-    // ALWAYS reset processing here
-    setIsProcessing(false);
-  }
-};
+  };
 
   const formatTimeIn = (time: string | null) => {
     if (!time) return "N/A";
@@ -454,21 +470,13 @@ const Kiosk = () => {
 
   const getImageUrl = (path: string | null): string | undefined => {
     if (!path) return undefined;
-
-    // Clean escaped slashes
     const cleanPath = path.replace(/\\/g, '');
-
-    // If already full URL
     if (cleanPath.startsWith('http')) return cleanPath;
-
     return `https://api-sas.slarenasitsolutions.com/public/${cleanPath}`;
   };
 
-  // Handle card click to show modal
   const handleCardClick = (record: RecentRecord) => {
     console.log("Card clicked:", record);
-    
-    // Validate record has required data
     if (!record || !record.first_name) {
       console.warn("Invalid record data for card click");
       return;
@@ -480,26 +488,19 @@ const Kiosk = () => {
       time_in: record.time_in || new Date().toISOString(),
     };
 
-    // Clear any existing timeouts
     if (modalTimeoutRef.current) {
       clearTimeout(modalTimeoutRef.current);
       modalTimeoutRef.current = null;
     }
 
-    // Clear all other messages and state
     setNotRegisteredMessage("");
     setWaitMessage("");
     setErrorTitle("Not Registered");
     setApproachingMessage("");
     setIsProcessing(false);
-    
-    // Show scanned modal
     setScannedStudent(studentData);
     setActiveModal("scanned");
 
-    console.log("Modal displayed for:", studentData.first_name, studentData.last_name);
-
-    // Set timeout to close modal after 1500ms
     modalTimeoutRef.current = setTimeout(() => {
       closeAllModals();
       inputRef.current?.focus();
@@ -508,14 +509,12 @@ const Kiosk = () => {
 
   return (
     <div className="w-screen h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-6 flex flex-col overflow-hidden relative">
-      {/* Animated Background Blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/20 rounded-full mix-blend-screen filter blur-3xl opacity-20 animate-blob"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/20 rounded-full mix-blend-screen filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-cyan-500/10 rounded-full mix-blend-screen filter blur-3xl opacity-10 animate-blob animation-delay-2000"></div>
       </div>
 
-      {/* Hidden Input */}
       <form onSubmit={handleScan} className="opacity-0 absolute">
         <input
           ref={inputRef}
@@ -525,16 +524,6 @@ const Kiosk = () => {
         />
       </form>
 
-      {/* EXIT BUTTON */}
-      {/* <div className="absolute top-6 right-6 z-70">
-        <div className="opacity-0 hover:opacity-100 transition-opacity duration-300 ">
-          <Button onClick={() => navigate("/dashboard")}>
-            <ChevronLeft className="mr-2" /> Exit
-          </Button>
-        </div>
-      </div> */}
-
-      {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-10">
         {showWelcome || (!loadingRecords && recentRecords.length === 0) ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
@@ -563,10 +552,6 @@ const Kiosk = () => {
             <p className="text-xl text-white/70 mb-6 max-w-md">
               Please scan your RFID card to check in
             </p>
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-white/50">{currentDate}</p>
-              <p className="text-3xl font-bold text-blue-400">{currentTime}</p>
-            </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 grid-rows-2 gap-6 h-full pb-2 overflow-auto">
@@ -587,7 +572,6 @@ const Kiosk = () => {
                     </div>
                   ) : record ? (
                     <div className="w-full flex gap-10">
-                      {/* Left Column - Avatar and Name */}
                       <div className="flex flex-col items-center justify-start flex-shrink-0">
                         {record.profile_picture_url ? (
                           <img
@@ -609,8 +593,6 @@ const Kiosk = () => {
                           />
                         )}
                       </div>
-
-                      {/* Right Column - Time In/Out Details */}
                       <div className="flex-1 flex flex-col gap-4 justify-start">
                         <div className="flex flex-col gap-1">
                           <h2 className="text-3xl font-bold text-white leading-tight">
@@ -655,8 +637,6 @@ const Kiosk = () => {
       </div>
 
       <div className="grid grid-cols-12 gap-4 w-full mt-6">
-
-        {/* ANNOUNCEMENT - 10 COLS */}
         <div className="col-span-10 bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-md text-white py-6 overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
           <div className="flex gap-16">
             <div className="marquee text-xl font-semibold text-white/90">
@@ -677,17 +657,15 @@ const Kiosk = () => {
           </div>
         </div>
 
-        {/* DATE & TIME - 2 COLS */}
         <div className="col-span-2 flex items-center justify-center">
           <div className="w-full bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-3 shadow-xl text-white font-semibold text-center hover:bg-white/15 transition-all">
             <p className="text-sm text-white/70">{currentDate}</p>
             <p className="text-2xl font-bold text-white">{currentTime}</p>
           </div>
         </div>
-
       </div>
 
-      {/* UNIFIED MODAL */}
+      {/* MODALS */}
       {activeModal === "scanned" && scannedStudent && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999]" onClick={closeAllModals}>
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-green-400/50 p-12 rounded-3xl text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -718,7 +696,6 @@ const Kiosk = () => {
 
             <p className="text-white font-semibold text-lg mb-2">Attendance Recorded</p>
 
-            {/* 5 MINUTES APPROACHING MESSAGE */}
             {approachingMessage && (
               <div className="mt-4 px-4 py-2 bg-yellow-500/20 border border-yellow-400 rounded-xl">
                 <p className="text-yellow-300 font-semibold">
