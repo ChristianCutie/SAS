@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
     X,
     Save,
@@ -8,8 +9,6 @@ import {
     Calendar,
     BookOpen,
     Hash,
-    AlertCircle,
-    CheckCircle2,
     Upload,
     Image as ImageIcon,
     Trash2
@@ -18,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { studentService, type Student } from '@/services/api';
 
 interface StudentFormProps {
@@ -29,8 +27,6 @@ interface StudentFormProps {
 
 const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<string | null>(null);
     const [profilePicturePreview, setProfilePicturePreview] = useState<string | null>(null);
     const [profilePictureFile, setProfilePictureFile] = useState<File | null>(null);
     const [existingProfilePicture, setExistingProfilePicture] = useState<string | null>(null);
@@ -188,13 +184,11 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
         e.preventDefault();
 
         if (!validateForm()) {
-            setError('Please fill in all required fields correctly.');
+            toast.error('Please fill in all required fields correctly.');
             return;
         }
 
         setLoading(true);
-        setError(null);
-        setSuccess(null);
 
         try {
             const submitData = profilePictureFile
@@ -231,11 +225,11 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
             if (student) {
                 // Update existing student
                 await studentService.updateStudent(student.id, submitData);
-                setSuccess('Student updated successfully!');
+                toast.success('Student updated successfully!');
             } else {
                 // Create new student
                 await studentService.createStudent(submitData);
-                setSuccess('Student created successfully!');
+                toast.success('Student created successfully!');
             }
 
             // Wait a moment to show success message, then close
@@ -254,7 +248,7 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
             if (err.response?.data?.errors) {
                 // Handle Laravel validation errors
                 const errorMessages = Object.values(err.response.data.errors).flat();
-                setError(errorMessages.join(', '));
+                toast.error(errorMessages.join(', '));
 
                 // Set field-specific errors
                 if (err.response.data.errors) {
@@ -267,9 +261,9 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
                     setErrors(fieldErrors);
                 }
             } else if (err.response?.data?.message) {
-                setError(err.response.data.message);
+                toast.error(err.response.data.message);
             } else {
-                setError('Failed to save student. Please try again.');
+                toast.error('Failed to save student. Please try again.');
             }
         } finally {
             setLoading(false);
@@ -311,22 +305,6 @@ const StudentForm = ({ student, onClose, onSuccess }: StudentFormProps) => {
 
                 <form onSubmit={handleSubmit}>
                     <CardContent className="p-6 space-y-6">
-                        {/* Error/Success Messages */}
-                        {error && (
-                            <Alert variant="destructive">
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertDescription>{error}</AlertDescription>
-                            </Alert>
-                        )}
-
-                        {success && (
-                            <Alert className="bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 border-emerald-500/30">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                <AlertDescription className="text-emerald-700">
-                                    {success}
-                                </AlertDescription>
-                            </Alert>
-                        )}
 
                         
                         

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { utils, writeFile } from 'xlsx';
+import { toast } from 'sonner';
 import { attendanceService } from '@/services/api';
 import {
     Table,
@@ -312,7 +313,7 @@ const AttendanceList = () => {
 
         if (activeTab === 'students') {
             if (attendanceRecords.length === 0) {
-                alert('No records to export');
+                toast.error('No records to export');
                 return;
             }
             dataToExport = attendanceRecords.map(record => ({
@@ -326,7 +327,7 @@ const AttendanceList = () => {
             }));
         } else {
             if (recentEmployeeAttendance.length === 0) {
-                alert('No records to export');
+                toast.error('No records to export');
                 return;
             }
             dataToExport = recentEmployeeAttendance.map(record => ({

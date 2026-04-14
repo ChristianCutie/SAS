@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { utils, writeFile } from "xlsx";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
@@ -84,11 +85,11 @@ const StudentList = () => {
     if (window.confirm(`Are you sure you want to archive ${studentName}?`)) {
       try {
         await studentService.archiveStudent(id);
-        alert("Student archived successfully");
+        toast.success("Student archived successfully");
         loadStudents();
         loadStats();
       } catch (error) {
-        alert("Failed to archive student");
+        toast.error("Failed to archive student");
         console.error("Archive error:", error);
       }
     }
@@ -98,11 +99,11 @@ const StudentList = () => {
     if (window.confirm(`Are you sure you want to restore ${studentName}?`)) {
       try {
         await studentService.restoreStudent(id);
-        alert("Student restored successfully");
+        toast.success("Student restored successfully");
         loadStudents();
         loadStats();
       } catch (error) {
-        alert("Failed to restore student");
+        toast.error("Failed to restore student");
         console.error("Restore error:", error);
       }
     }
@@ -116,11 +117,11 @@ const StudentList = () => {
     ) {
       try {
         await studentService.deleteStudent(id);
-        alert("Student deleted successfully");
+        toast.success("Student deleted successfully");
         loadStudents();
         loadStats();
       } catch (error) {
-        alert("Failed to delete student");
+        toast.error("Failed to delete student");
         console.error("Delete error:", error);
       }
     }
@@ -150,7 +151,7 @@ const StudentList = () => {
 
   const exportToExcel = () => {
     if (activeStudents.length === 0) {
-      alert("No active students to export");
+      toast.error("No active students to export");
       return;
     }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFingerprint } from "@/hooks/useFingerprint";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -33,16 +34,16 @@ export const FingerprintScanner = () => {
 
   const handleSave = async () => {
     if (!state.latestIntermediateData) {
-      alert("Scan fingerprint first!");
+      toast.error("Scan fingerprint first!");
       return;
     }
 
     setSaving(true);
     try {
       const res = await saveTemplate(1);
-      alert(res.message);
+      toast.success(res.message);
     } catch (e) {
-      alert("Save failed");
+      toast.error("Save failed");
     } finally {
       setSaving(false);
     }

@@ -205,23 +205,24 @@ const Kiosk = () => {
     }
   };
 
-  const loadAnnouncements = async () => {
-    try {
-      const response = await announcementService.getAnnouncements();
+ const loadAnnouncements = async () => {
+  try {
+    const response = await announcementService.getAnnouncements();
 
-      if (Array.isArray(response)) {
-        const announcementTexts = response
-          .map(
-            (announcement: any) =>
-              announcement.title || announcement.content || "",
-          )
-          .filter((text: string) => text.trim() !== "");
-        setAnnouncements(announcementTexts);
-      }
-    } catch (error) {
-      console.error("Error loading announcements:", error);
+    if (Array.isArray(response)) {
+      const announcementTexts = response
+        .filter((announcement: any) => announcement.is_active === 1)
+        .map((announcement: any) =>
+          announcement.title || announcement.content || ""
+        )
+        .filter((text: string) => text.trim() !== "");
+
+      setAnnouncements(announcementTexts);
     }
-  };
+  } catch (error) {
+    console.error("Error loading announcements:", error);
+  }
+};
 
   const playSound = (type: "success" | "error") => {
     const audio = new Audio(
@@ -578,17 +579,17 @@ const Kiosk = () => {
                           <img
                             src={
                               getImageUrl(record.profile_picture_url) ||
-                              `https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}`
+                              `https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}&background=3b82f6&color=fff`
                             }
                             alt="Profile"
                             className="w-45 h-45 rounded-full shadow-2xl border-2 border-white/20 object-cover"
                             onError={(e) => {
-                              e.currentTarget.src = `https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}&background=3b82f6&color=fff`;
+                              e.currentTarget.src = `https://api.dicebear.com/9.x/initials/svg?seed=EMP&backgroundColor=3b82f6&scale=75`;
                             }}
                           />
                         ) : (
                           <img
-                            src={`https://ui-avatars.com/api/?name=${record.first_name}+${record.last_name}&background=3b82f6&color=fff`}
+                            src={`https://api.dicebear.com/9.x/initials/svg?seed=EMP&backgroundColor=3b82f6&scale=75`}
                             className="w-45 h-45 rounded-full shadow-2xl border-2 border-white/20 object-cover"
                             alt="Avatar"
                           />

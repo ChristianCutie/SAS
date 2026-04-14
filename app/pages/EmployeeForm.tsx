@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
     X,
     Save,
@@ -6,8 +7,6 @@ import {
     Mail,
     Phone,
     Calendar,
-    AlertCircle,
-    CheckCircle2,
     User,
     Hash,
 } from 'lucide-react';
@@ -15,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { employeeService, type Employee } from '@/services/api';
 
 interface EmployeeFormProps {
@@ -26,8 +24,6 @@ interface EmployeeFormProps {
 
 const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         rfid_tag_number: '',
@@ -123,13 +119,11 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
         e.preventDefault();
 
         if (!validateForm()) {
-            setError('Please fill in all required fields correctly.');
+            toast.error('Please fill in all required fields correctly.');
             return;
         }
 
         setLoading(true);
-        setError(null);
-        setSuccess(null);
 
         try {
             // Prepare data for submission
@@ -143,11 +137,11 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
             if (employee) {
                 // Update existing employee
                 await employeeService.updateEmployee(employee.id, submitData);
-                setSuccess('Employee updated successfully!');
+                toast.success('Employee updated successfully!');
             } else {
                 // Create new employee
                 await employeeService.createEmployee(submitData);
-                setSuccess('Employee created successfully!');
+                toast.success('Employee created successfully!');
             }
 
             // Wait a moment to show success message, then close
@@ -160,7 +154,7 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
             if (err.response?.data?.errors) {
                 // Handle Laravel validation errors
                 const errorMessages = Object.values(err.response.data.errors).flat();
-                setError(errorMessages.join(', '));
+                toast.error(errorMessages.join(', '));
 
                 // Set field-specific errors
                 if (err.response.data.errors) {
@@ -173,9 +167,9 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                     setErrors(fieldErrors);
                 }
             } else if (err.response?.data?.message) {
-                setError(err.response.data.message);
+                toast.error(err.response.data.message);
             } else {
-                setError('Failed to save employee. Please try again.');
+                toast.error('Failed to save employee. Please try again.');
             }
         } finally {
             setLoading(false);
@@ -214,23 +208,6 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
 
                 <form onSubmit={handleSubmit}>
                     <CardContent className="p-6 space-y-6">
-                        {/* Error/Success Messages */}
-                        {error && (
-                            <Alert variant="destructive">
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertDescription>{error}</AlertDescription>
-                            </Alert>
-                        )}
-
-                        {success && (
-                            <Alert className="bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 border-emerald-500/30">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                <AlertDescription className="text-emerald-700">
-                                    {success}
-                                </AlertDescription>
-                            </Alert>
-                        )}
-
                         {/* Employee Information Section */}
                         <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">

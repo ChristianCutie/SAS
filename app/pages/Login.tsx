@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ScanLine, User, Lock, Eye, EyeOff, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+import { ScanLine, User, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { authService } from '@/services/api';
 
 const Login = () => {
@@ -13,8 +13,6 @@ const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState(false);
     const navigate = useNavigate();
 
     // Check if user is already authenticated on component mount
@@ -26,17 +24,16 @@ const Login = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
         setLoading(true);
 
         try {
             await authService.login(email, password);
-            setSuccess(true);
+            toast.success('Login successful!');
             setTimeout(() => navigate('/dashboard'), 1500);
         } catch (err: any) {
-            if (err.response?.status === 401) setError('Invalid email or password');
-            else if (err.response?.data?.message) setError(err.response.data.message);
-            else setError('An error occurred. Please try again.');
+            if (err.response?.status === 401) toast.error('Invalid email or password');
+            else if (err.response?.data?.message) toast.error(err.response.data.message);
+            else toast.error('An error occurred. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -63,25 +60,9 @@ const Login = () => {
                     <CardDescription className="text-gray-600">
                         Enter your credentials to access the dashboard
                     </CardDescription>
-
-                    {success && (
-                        <Alert className="mb-4 bg-green-50 border-green-200">
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                            <AlertDescription className="text-green-800">
-                                Login successful! Redirecting to dashboard...
-                            </AlertDescription>
-                        </Alert>
-                    )}
                 </CardHeader>
 
                 <CardContent>
-                    {error && (
-                        <Alert variant="destructive" className="mb-4">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                    )}
-
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="email" className="text-gray-700">Username</Label>

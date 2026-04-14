@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { announcementService } from '../services/api';
 import {
   Table,
@@ -12,7 +13,6 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Alert } from '../components/ui/alert';
 import Switch from '../components/ui/switch';
 import {
   Plus,
@@ -33,13 +33,12 @@ interface Announcement {
   created_at: string;
   updated_at: string;
 }
+
 const Announcement = () => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [stats, setStats] = useState({
@@ -51,8 +50,6 @@ const Announcement = () => {
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
   const [isActive, setIsActive] = useState(true);
 
-  // const API_BASE_URL = 'https://api-sas.slarenasitsolutions.com/public/api';
-
   // Fetch announcements on component mount
   useEffect(() => {
     fetchAnnouncements();
@@ -62,14 +59,13 @@ const Announcement = () => {
   const fetchAnnouncements = async () => {
     try {
       setFetchLoading(true);
-      setError(null);
       
       const data = await announcementService.getAnnouncements();
       setAnnouncements(data);
       calculateStats(data);
     } catch (err: any) {
       console.error('Error fetching announcements:', err);
-      setError('Failed to load announcements. Please try again.');
+      toast.error('Failed to load announcements. Please try again.');
     } finally {
       setFetchLoading(false);
     }
@@ -96,7 +92,7 @@ const Announcement = () => {
       // Get the current announcement to preserve content
       const currentAnnouncement = announcements.find(a => a.id === id);
       if (!currentAnnouncement) {
-        setError('Announcement not found');
+        toast.error('Announcement not found');
         return;
       }
       
@@ -111,12 +107,10 @@ const Announcement = () => {
           ? { ...announcement, is_active: newStatus }
           : announcement
       ));
-      setSuccess('Announcement status updated successfully!');
-      setTimeout(() => setSuccess(null), 3000);
+      toast.success('Announcement status updated successfully!');
     } catch (err: any) {
       console.error('Error toggling announcement:', err);
-      setError(err.response?.data?.message || 'Failed to update announcement status.');
-      setTimeout(() => setError(null), 3000);
+      toast.error(err.response?.data?.message || 'Failed to update announcement status.');
     } finally {
       setToggleLoading(null);
     }
@@ -134,12 +128,10 @@ const Announcement = () => {
 
       // Remove from list
       setAnnouncements(announcements.filter(announcement => announcement.id !== id));
-      setSuccess('Announcement deleted successfully!');
-      setTimeout(() => setSuccess(null), 3000);
+      toast.success('Announcement deleted successfully!');
     } catch (err: any) {
       console.error('Error deleting announcement:', err);
-      setError(err.response?.data?.message || 'Failed to delete announcement.');
-      setTimeout(() => setError(null), 3000);
+      toast.error(err.response?.data?.message || 'Failed to delete announcement.');
     } finally {
       setDeleteLoading(null);
     }
@@ -150,14 +142,12 @@ const Announcement = () => {
     e.preventDefault();
     
     if (!content.trim()) {
-      setError('Please enter announcement content');
+      toast.error('Please enter announcement content');
       return;
     }
 
     try {
       setLoading(true);
-      setError(null);
-      setSuccess(null);
 
       const response = await announcementService.createAnnouncement(content, isActive);
 
@@ -165,16 +155,13 @@ const Announcement = () => {
       setAnnouncements([response.data, ...announcements]);
       setContent('');
       setIsActive(true);
-      setSuccess('Announcement created successfully!');
+      toast.success('Announcement created successfully!');
       
       // Close modal
       setIsModalOpen(false);
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       console.error('Error creating announcement:', err);
-      setError(err.response?.data?.message || 'Failed to create announcement. Please try again.');
+      toast.error(err.response?.data?.message || 'Failed to create announcement. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -184,7 +171,6 @@ const Announcement = () => {
     setIsModalOpen(false);
     setContent('');
     setIsActive(true);
-    setError(null);
   };
 
   // Filter announcements based on search term
@@ -233,19 +219,6 @@ const Announcement = () => {
           </Button>
         </div>
       </div>
-
-      {/* Success/Error Messages */}
-      {error && (
-        <Alert className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4">
-          {error}
-        </Alert>
-      )}
-      
-      {success && (
-        <Alert className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
-          {success}
-        </Alert>
-      )}
 
       {/* Search and Filter Bar */}
       <Card className="border-slate-200">
@@ -336,7 +309,6 @@ const Announcement = () => {
               </div>
             </CardHeader>
             <CardContent className="p-6">
-              {/* Modal Form */}
               <form onSubmit={handleCreateAnnouncement} className="space-y-4">
                 <div>
                   <Label htmlFor="announcement-content" className="text-slate-700 font-medium mb-2">
@@ -365,12 +337,6 @@ const Announcement = () => {
                     />
                   </div>
                 </div>
-
-                {error && (
-                  <Alert className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4">
-                    {error}
-                  </Alert>
-                )}
 
                 <div className="flex gap-3 justify-end">
                   <Button
@@ -447,7 +413,6 @@ const Announcement = () => {
                       <TableCell>
                         <div className="flex items-center">
                           <Switch
-                            className="btn-sm"
                             checked={announcement.is_active === 1}
                             onCheckedChange={() => handleToggleActive(announcement.id, announcement.is_active)}
                             disabled={toggleLoading === announcement.id}

@@ -22,6 +22,7 @@ import {
   ClipboardList,
   User,
   UserPen,
+  Briefcase,
 } from "lucide-react";
 import { dashboardService } from "@/services/api";
 
@@ -314,7 +315,7 @@ const Dashboard = () => {
           >
             <div className="flex items-center gap-4">
               <div className="p-3 bg-pink-100 rounded-xl group-hover:bg-pink-200 transition-colors">
-                <UserPen className="w-6 h-6 text-pink-600" />
+                <Briefcase className="w-6 h-6 text-pink-600" />
               </div>
               <div>
                 <h3 className="font-semibold text-slate-900 mb-1">

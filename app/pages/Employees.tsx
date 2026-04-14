@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { utils, writeFile } from 'xlsx';
+import { toast } from 'sonner';
 import {
     Table,
     TableBody,
@@ -82,11 +83,11 @@ const EmployeeList = () => {
         if (window.confirm(`Are you sure you want to archive ${employeeName}?`)) {
             try {
                 await employeeService.archiveEmployee(id);
-                alert('Employee archived successfully');
+                toast.success('Employee archived successfully');
                 loadEmployees();
                 //loadStats();
             } catch (error) {
-                alert('Failed to archive employee');
+                toast.error('Failed to archive employee');
                 console.error('Archive error:', error);
             }
         }
@@ -96,11 +97,11 @@ const EmployeeList = () => {
         if (window.confirm(`Are you sure you want to restore ${employeeName}?`)) {
             try {
                 await employeeService.restoreEmployee(id);
-                alert('Employee restored successfully');
+                toast.success('Employee restored successfully');
                 loadEmployees();
                 //loadStats();
             } catch (error) {
-                alert('Failed to restore employee');
+                toast.error('Failed to restore employee');
                 console.error('Restore error:', error);
             }
         }
@@ -110,11 +111,11 @@ const EmployeeList = () => {
         if (window.confirm(`Are you sure you want to permanently delete ${employeeName}? This action cannot be undone.`)) {
             try {
                 await employeeService.deleteEmployee(id);
-                alert('Employee deleted successfully');
+                toast.success('Employee deleted successfully');
                 loadEmployees();
                // loadStats();
             } catch (error) {
-                alert('Failed to delete employee');
+                toast.error('Failed to delete employee');
                 console.error('Delete error:', error);
             }
         }
@@ -144,7 +145,7 @@ const EmployeeList = () => {
 
     const exportToExcel = () => {
         if (activeEmployees.length === 0) {
-            alert('No active employees to export');
+            toast.error('No active employees to export');
             return;
         }
 

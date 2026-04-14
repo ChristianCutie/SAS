@@ -52,7 +52,7 @@ const Navbar = () => {
                 id: 'logout-confirm',
             });
             setTimeout(() => {
-                navigate('/');
+                navigate('/login');
             }, 500);
         } catch (error) {
             toast.error('Logout failed. Please try again.', {
