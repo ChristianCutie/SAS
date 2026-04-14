@@ -257,6 +257,7 @@ const Kiosk = () => {
 
   try {
     const result = await attendanceService.timeIn(rfid);
+    console.log("RFID Scan Result:", result);
 
     const isSuccess =
       result?.isSuccess ||
@@ -264,7 +265,10 @@ const Kiosk = () => {
       result?.success === true ||
       !!result?.attendance;
 
-    if (isSuccess && result?.attendance) {
+    // Check if we have attendance data - for both students and employees
+    const hasAttendance = !!result?.attendance || (result?.student) || (result?.employee);
+    
+    if (isSuccess && hasAttendance) {
       playSound("success");
       resetInactivityTimer();
 
@@ -279,19 +283,29 @@ const Kiosk = () => {
         setApproachingMessage("");
       }
 
+      // Try to get student data from different possible response structures
       if (result.student) {
+        // Student object exists in response
         studentData = {
           first_name: result.student.first_name || "",
           last_name: result.student.last_name || "",
-          time_in: attendance.time_in || new Date().toISOString(),
+          time_in: attendance?.time_in || result.student.time_in || new Date().toISOString(),
         };
-      } else if (attendance.first_name && attendance.last_name) {
+      } else if (result.employee) {
+        // Employee object exists in response
+        studentData = {
+          first_name: result.employee.first_name || result.employee.employee_number || "",
+          last_name: result.employee.last_name || "",
+          time_in: attendance?.time_in || result.employee.time_in || new Date().toISOString(),
+        };
+      } else if (attendance?.first_name && attendance?.last_name) {
+        // Data in attendance object
         studentData = {
           first_name: attendance.first_name || "",
           last_name: attendance.last_name || "",
           time_in: attendance.time_in || new Date().toISOString(),
         };
-      } else if (attendance.first_name || attendance.last_name || attendance.employee_number) {
+      } else if (attendance?.first_name || attendance?.last_name || attendance?.employee_number) {
         // Fallback for employee records or incomplete data
         studentData = {
           first_name: attendance.first_name || attendance.employee_number || "",
@@ -300,7 +314,7 @@ const Kiosk = () => {
         };
       }
 
-      if (studentData) {
+      if (studentData && (studentData.first_name || studentData.last_name)) {
         // CLEAR old timeout completely
         if (modalTimeoutRef.current) {
           clearTimeout(modalTimeoutRef.current);
@@ -313,6 +327,8 @@ const Kiosk = () => {
         setErrorTitle("Not Registered");
         setScannedStudent(studentData);
         setActiveModal("scanned");
+
+        console.log("Modal shown for:", studentData.first_name, studentData.last_name);
 
         // Set timeout to close modal after 1500ms
         modalTimeoutRef.current = setTimeout(() => {
@@ -369,6 +385,7 @@ const Kiosk = () => {
       }
     }
   } catch (error: any) {
+    console.error("RFID Scan Error:", error);
     playSound("error");
 
     let errorMessage = "Student not registered";
@@ -447,6 +464,48 @@ const Kiosk = () => {
     return `https://api-sas.slarenasitsolutions.com/public/${cleanPath}`;
   };
 
+  // Handle card click to show modal
+  const handleCardClick = (record: RecentRecord) => {
+    console.log("Card clicked:", record);
+    
+    // Validate record has required data
+    if (!record || !record.first_name) {
+      console.warn("Invalid record data for card click");
+      return;
+    }
+
+    const studentData: ScannedStudent = {
+      first_name: record.first_name || "",
+      last_name: record.last_name || "",
+      time_in: record.time_in || new Date().toISOString(),
+    };
+
+    // Clear any existing timeouts
+    if (modalTimeoutRef.current) {
+      clearTimeout(modalTimeoutRef.current);
+      modalTimeoutRef.current = null;
+    }
+
+    // Clear all other messages and state
+    setNotRegisteredMessage("");
+    setWaitMessage("");
+    setErrorTitle("Not Registered");
+    setApproachingMessage("");
+    setIsProcessing(false);
+    
+    // Show scanned modal
+    setScannedStudent(studentData);
+    setActiveModal("scanned");
+
+    console.log("Modal displayed for:", studentData.first_name, studentData.last_name);
+
+    // Set timeout to close modal after 1500ms
+    modalTimeoutRef.current = setTimeout(() => {
+      closeAllModals();
+      inputRef.current?.focus();
+    }, 1500);
+  };
+
   return (
     <div className="w-screen h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-6 flex flex-col overflow-hidden relative">
       {/* Animated Background Blobs */}
@@ -518,7 +577,8 @@ const Kiosk = () => {
               return (
                 <div
                   key={index}
-                  className="bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl hover:shadow-3xl flex items-start justify-start p-10 transition-all duration-300 hover:border-white/20 hover:bg-gradient-to-br hover:from-white/20 hover:to-white/10"
+                  onClick={() => record && handleCardClick(record)}
+                  className="bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl hover:shadow-3xl flex items-start justify-start p-10 transition-all duration-300 hover:border-white/20 hover:bg-gradient-to-br hover:from-white/20 hover:to-white/10 cursor-pointer"
                 >
                   {loadingRecords ? (
                     <div className="flex items-center gap-2">
