@@ -84,11 +84,48 @@ const Kiosk = () => {
     // Initialize inactivity timer
     resetInactivityTimer();
 
-    // Add keyboard listener for Ctrl+F12 to access login
+    // Request fullscreen mode when component mounts
+    const requestFullscreen = async () => {
+      try {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if ((elem as any).webkitRequestFullscreen) {
+          await (elem as any).webkitRequestFullscreen();
+        } else if ((elem as any).mozRequestFullScreen) {
+          await (elem as any).mozRequestFullScreen();
+        } else if ((elem as any).msRequestFullscreen) {
+          await (elem as any).msRequestFullscreen();
+        }
+      } catch (error) {
+        console.log('Fullscreen request failed or was denied:', error);
+      }
+    };
+
+    requestFullscreen();
+
+    // Add keyboard listener for Ctrl+F12 to access login and F11 to toggle fullscreen
     const handleKeyPress = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key === 'F12') {
         event.preventDefault();
-        navigate('/login');
+        
+        // Exit fullscreen before navigating
+        if (document.fullscreenElement) {
+          document.exitFullscreen().then(() => {
+            navigate('/login');
+          });
+        } else {
+          navigate('/login');
+        }
+      }
+      // F11 to toggle fullscreen manually
+      if (event.key === 'F11') {
+        event.preventDefault();
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          requestFullscreen();
+        }
       }
     };
 
@@ -103,6 +140,11 @@ const Kiosk = () => {
       window.removeEventListener('keydown', handleKeyPress);
       if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
       if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
+      
+      // Exit fullscreen when leaving the page
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
     };
   }, [navigate]);
 

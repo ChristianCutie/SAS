@@ -234,7 +234,7 @@ export const studentService = {
         }
     },
 
-    // Get student statistics - WITH DEDUPLICATION
+    // // Get student statistics - WITH DEDUPLICATION
     getStudentStats: async () => {
         try {
             // Reuse pending request if one exists
@@ -398,6 +398,41 @@ export const attendanceService = {
         }
     },
 
+    // Get recent attendance with separated students and employees (for TabsUI)
+    getRecentAttendanceSeparated: async () => {
+        try {
+            const response = await api.get('/employee/attendance');
+            const data = response.data;
+            
+            // Handle the new format: { isSuccess, message, data: [...] }
+            if (data.data && Array.isArray(data.data)) {
+                // Separate employees from the combined array
+                const employees = data.data.map((record: any) => ({
+                    type: 'employee' as const,
+                    id: record.id,
+                    employee_number: record.employee_number,
+                    attendance_date: record.attendance_date,
+                    time_in: record.time_in,
+                    time_out: record.time_out,
+                    status: record.status,
+                    created_at: record.created_at,
+                    employee: record.employee || null
+                }));
+                
+                return {
+                    students: [],
+                    employees: employees
+                };
+            }
+            
+            // Fallback for old format
+            return { students: [], employees: [] };
+        } catch (error) {
+            console.error('Error fetching recent attendance:', error);
+            throw error;
+        }
+    },
+
     // Get all attendance records with pagination and filters
     getAttendances: async (params?: {
         page?: number;
@@ -516,7 +551,7 @@ export const announcementService = {
     // Get all announcements
     getAnnouncements: async () => {
         try {
-            const response = await api.get('/announcements');
+            const response = await api.get('/announcements/admin');
             return response.data;
         } catch (error) {
             console.error('Error fetching announcements:', error);
@@ -788,30 +823,30 @@ export const employeeService = {
     },
 
     // Get employee statistics
-    getEmployeeStats: async () => {
-        try {
-            // Reuse pending request if one exists
-            if (employeeService._getEmployeeStatsPending) {
-                return employeeService._getEmployeeStatsPending;
-            }
+    // getEmployeeStats: async () => {
+    //     try {
+    //         // Reuse pending request if one exists
+    //         if (employeeService._getEmployeeStatsPending) {
+    //             return employeeService._getEmployeeStatsPending;
+    //         }
 
-            employeeService._getEmployeeStatsPending = api.get('/employees/stats');
+    //         employeeService._getEmployeeStatsPending = api.get('/employees/stats');
             
-            const response = await employeeService._getEmployeeStatsPending;
-            return response.data;
-        } catch (error) {
-            console.error('Error fetching employee stats:', error);
-            // Return fallback stats for development
-            return {
-                total_employees: 0,
-                active_employees: 0,
-                archived_employees: 0,
-                employees_by_department: {}
-            };
-        } finally {
-            employeeService._getEmployeeStatsPending = null;
-        }
-    },
+    //         const response = await employeeService._getEmployeeStatsPending;
+    //         return response.data;
+    //     } catch (error) {
+    //         console.error('Error fetching employee stats:', error);
+    //         // Return fallback stats for development
+    //         return {
+    //             total_employees: 0,
+    //             active_employees: 0,
+    //             archived_employees: 0,
+    //             employees_by_department: {}
+    //         };
+    //     } finally {
+    //         employeeService._getEmployeeStatsPending = null;
+    //     }
+    // },
 
     // Search employees
     searchEmployees: async (query: string) => {

@@ -25,7 +25,9 @@ import {
     User,
     Eye,
     Edit,
-    Trash2
+    Trash2,
+    Users,
+    UserCheck
 } from 'lucide-react';
 
 interface StudentData {
@@ -66,6 +68,26 @@ interface AttendanceRecord {
     student: StudentData;
 }
 
+
+interface RecentEmployeeAttendance {
+    type: 'employee';
+    id: number;
+    employee_number: string;
+    attendance_date: string;
+    time_in: string;
+    time_out: string | null;
+    status: string;
+    created_at: string;
+    employee?: {
+        id: number;
+        first_name: string;
+        last_name: string;
+        profile_picture: string | null;
+        department: string;
+        position: string;
+    } | null;
+}
+
 interface TransformedRecord {
     id: number;
     student_id: number;
@@ -92,7 +114,10 @@ interface AttendanceStats {
 }
 
 const AttendanceList = () => {
+    const [activeTab, setActiveTab] = useState<'students' | 'employees'>('students');
     const [attendanceRecords, setAttendanceRecords] = useState<TransformedRecord[]>([]);
+    //const [recentStudentAttendance, setRecentStudentAttendance] = useState<RecentStudentAttendance[]>([]);
+    const [recentEmployeeAttendance, setRecentEmployeeAttendance] = useState<RecentEmployeeAttendance[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'present' | 'absent' | 'late' | 'excused'>('all');
@@ -116,6 +141,7 @@ const AttendanceList = () => {
 
     useEffect(() => {
         loadAttendanceRecords();
+        loadRecentAttendance();
     }, [currentPage, perPage, searchTerm, filterStatus, startDate, endDate]);
 
     const transformAttendanceData = (apiData: AttendanceRecord[]): TransformedRecord[] => {
@@ -135,6 +161,18 @@ const AttendanceList = () => {
             remarks: null,
             profile_picture: record.student.profile_picture
         }));
+    };
+
+    const loadRecentAttendance = async () => {
+        try {
+            const response = await attendanceService.getRecentAttendanceSeparated();
+            
+            if (response && response.employees) {
+                setRecentEmployeeAttendance(response.employees);
+            }
+        } catch (error) {
+            console.error('Failed to load recent attendance:', error);
+        }
     };
 
     const loadAttendanceRecords = async () => {
@@ -193,21 +231,35 @@ const AttendanceList = () => {
     // };
 
     const exportToExcel = () => {
-        if (attendanceRecords.length === 0) {
-            alert('No records to export');
-            return;
-        }
+        let dataToExport: any[] = [];
 
-        // Prepare data for export
-        const dataToExport = attendanceRecords.map(record => ({
-            'Student Number': record.student_number,
-            'Student Name': `${record.last_name}, ${record.first_name}`,
-            'Date': new Date(record.attendance_date).toLocaleDateString(),
-            'Check-in Time': record.check_in_time || '-',
-            'Check-out Time': record.check_out_time || '-',
-            'Status': record.status.charAt(0).toUpperCase() + record.status.slice(1),
-            'Remarks': record.remarks || '-'
-        }));
+        if (activeTab === 'students') {
+            if (attendanceRecords.length === 0) {
+                alert('No records to export');
+                return;
+            }
+            dataToExport = attendanceRecords.map(record => ({
+                'Student Number': record.student_number,
+                'Student Name': `${record.last_name}, ${record.first_name}`,
+                'Date': new Date(record.attendance_date).toLocaleDateString(),
+                'Check-in Time': record.check_in_time || '-',
+                'Check-out Time': record.check_out_time || '-',
+                'Status': record.status.charAt(0).toUpperCase() + record.status.slice(1),
+                'Remarks': record.remarks || '-'
+            }));
+        } else {
+            if (recentEmployeeAttendance.length === 0) {
+                alert('No records to export');
+                return;
+            }
+            dataToExport = recentEmployeeAttendance.map(record => ({
+                'Employee Number': record.employee_number,
+                'Date': new Date(record.attendance_date).toLocaleDateString(),
+                'Check-in Time': record.time_in || '-',
+                'Check-out Time': record.time_out || '-',
+                'Status': record.status?.charAt(0).toUpperCase() + (record.status?.slice(1) || '') || '-'
+            }));
+        }
 
         // Create workbook and worksheet
         const worksheet = utils.json_to_sheet(dataToExport);
@@ -215,21 +267,29 @@ const AttendanceList = () => {
         utils.book_append_sheet(workbook, worksheet, 'Attendance Records');
 
         // Set column widths
-        const columnWidths = [
-            { wch: 15 }, // Student Number
-            { wch: 20 }, // Student Name
-            { wch: 20 }, // Course
-            { wch: 12 }, // Date
-            { wch: 15 }, // Check-in Time
-            { wch: 15 }, // Check-out Time
-            { wch: 12 }, // Status
-            { wch: 20 }  // Remarks
-        ];
+        const columnWidths = activeTab === 'students' 
+            ? [
+                { wch: 15 }, // Student Number
+                { wch: 20 }, // Student Name
+                { wch: 12 }, // Date
+                { wch: 15 }, // Check-in Time
+                { wch: 15 }, // Check-out Time
+                { wch: 12 }, // Status
+                { wch: 20 }  // Remarks
+            ]
+            : [
+                { wch: 15 }, // Employee Number
+                { wch: 12 }, // Date
+                { wch: 15 }, // Check-in Time
+                { wch: 15 }, // Check-out Time
+                { wch: 12 }  // Status
+            ];
         worksheet['!cols'] = columnWidths;
 
         // Generate filename
         const timestamp = new Date().toISOString().split('T')[0];
-        const filename = `Attendance_Records_${timestamp}.xlsx`;
+        const filePrefix = activeTab === 'students' ? 'Student_Attendance' : 'Employee_Attendance';
+        const filename = `${filePrefix}_${timestamp}.xlsx`;
 
         writeFile(workbook, filename);
     };
@@ -252,6 +312,12 @@ const AttendanceList = () => {
         }
     };
 
+    const formatTimeIn = (time: string | null) => {
+        if (!time) return '-';
+        const date = new Date(time);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
 
       const getImageUrl = (path: string | null): string | undefined => {
         if (!path) return undefined;
@@ -261,24 +327,60 @@ const AttendanceList = () => {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
+            {/* Header with Tabs */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900">Attendance</h1>
                     <p className="text-slate-600">
-                        Showing {attendanceRecords.length > 0 ? (currentPage - 1) * perPage + 1 : 0} to {Math.min(currentPage * perPage, totalRecords)} of {totalRecords} records
+                        {activeTab === 'students' 
+                            ? `Showing ${attendanceRecords.length > 0 ? (currentPage - 1) * perPage + 1 : 0} to ${Math.min(currentPage * perPage, totalRecords)} of ${totalRecords} records`
+                            : `Showing ${recentEmployeeAttendance.length} recent employee records`
+                        }
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" onClick={loadAttendanceRecords} disabled={loading}>
+                    <Button variant="outline" onClick={loadRecentAttendance} disabled={loading}>
                         <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
                 </div>
             </div>
 
-            {/* Stats Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {/* Tab Navigation */}
+            <div className="flex gap-2 border-b border-slate-200">
+                <button
+                    onClick={() => {
+                        setActiveTab('students');
+                        setCurrentPage(1);
+                    }}
+                    className={`px-4 py-2 font-medium border-b-2 transition-all flex items-center gap-2 ${
+                        activeTab === 'students'
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                    <Users className="h-4 w-4" />
+                    Student Attendance
+                </button>
+                <button
+                    onClick={() => {
+                        setActiveTab('employees');
+                        setCurrentPage(1);
+                    }}
+                    className={`px-4 py-2 font-medium border-b-2 transition-all flex items-center gap-2 ${
+                        activeTab === 'employees'
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                    <UserCheck className="h-4 w-4" />
+                    Employee Attendance
+                </button>
+            </div>
+
+            {/* Stats Summary - Only for Students */}
+            {activeTab === 'students' && (
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
                 <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between">
@@ -349,8 +451,10 @@ const AttendanceList = () => {
                     </CardContent>
                 </Card>
             </div>
+            )}
 
-            {/* Search and Filter Bar */}
+            {/* Search and Filter Bar - Only for Students */}
+            {activeTab === 'students' && (
             <Card className="border-slate-200">
                 <CardContent className="p-6">
                     <div className="space-y-4">
@@ -460,11 +564,13 @@ const AttendanceList = () => {
                     </div>
                 </CardContent>
             </Card>
+            )}
 
-            {/* Attendance Records Table */}
+            {/* Student Attendance Table */}
+            {activeTab === 'students' && (
             <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="border-b border-slate-100">
-                    <CardTitle>Attendance Records</CardTitle>
+                    <CardTitle>Student Attendance Records</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                     {loading ? (
@@ -650,6 +756,110 @@ const AttendanceList = () => {
                     </div>
                 )}
             </Card>
+            )}
+
+            {/* Employee Attendance Table */}
+            {activeTab === 'employees' && (
+            <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="border-b border-slate-100">
+                    <CardTitle>Recent Employee Attendance</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {loading ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                            <p className="mt-4 text-slate-500">Loading attendance records...</p>
+                        </div>
+                    ) : recentEmployeeAttendance.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Calendar className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-medium text-slate-900">No records found</h3>
+                            <p className="text-slate-500 mt-1">No recent employee attendance records available</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableHead className="font-semibold text-slate-700">Employee Number</TableHead>
+                                        <TableHead className="font-semibold text-slate-700">Date</TableHead>
+                                        <TableHead className="font-semibold text-slate-700">Check-in</TableHead>
+                                        <TableHead className="font-semibold text-slate-700">Check-out</TableHead>
+                                        <TableHead className="font-semibold text-slate-700">Status</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {recentEmployeeAttendance.map((record) => (
+                                        <TableRow
+                                            key={record.id}
+                                            className="hover:bg-slate-50/50 transition-colors"
+                                        >
+                                            <TableCell>
+                                                <div className="font-medium text-slate-900">
+                                                    {record.employee_number}
+                                                </div>
+                                                {record.employee && (
+                                                    <div className="text-sm text-slate-500">
+                                                        {record.employee.first_name} {record.employee.last_name}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="text-sm text-slate-700">
+                                                    {new Date(record.attendance_date).toLocaleDateString()}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="text-sm font-mono text-slate-700">
+                                                    {formatTimeIn(record.time_in)}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="text-sm font-mono text-slate-700">
+                                                    {formatTimeIn(record.time_out)}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {getStatusBadge(record.status)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-slate-600 hover:text-slate-700 hover:bg-slate-50 border-slate-200"
+                                                        title="View details"
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                                                        title="Edit record"
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                                        title="Delete record"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+            )}
         </div>
     );
 };

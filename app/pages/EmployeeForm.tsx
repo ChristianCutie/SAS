@@ -414,7 +414,7 @@ const EmployeeForm = ({ employee, onClose, onSuccess }: EmployeeFormProps) => {
                                             onChange={handleChange}
                                             placeholder="e.g., EMP-2024-001"
                                             className="pl-10"
-                                            disabled={loading || !!employee}
+                                            disabled={loading}
                                         />
                                     </div>
                                     {errors.employee_number && (
