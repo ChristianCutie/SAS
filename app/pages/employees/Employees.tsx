@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { employeeService } from '@/services/api';
 import type { Employee } from '@/services/api';
-import EmployeeForm from './EmployeeForm';
+import EmployeeForm from './components/EmployeeForm';
 
 const EmployeeList = () => {
     const [employees, setEmployees] = useState<Employee[]>([]);

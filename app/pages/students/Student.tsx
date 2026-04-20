@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { studentService } from "@/services/api";
 import type { Student } from "@/services/api";
-import StudentForm from "./StudentForm"; // We'll create this component
+import StudentForm from "./components/StudentForm"; // We'll create this component
 
 const StudentList = () => {
   const [students, setStudents] = useState<Student[]>([]);

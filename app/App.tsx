@@ -1,14 +1,14 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import Kiosk from "./pages/Kiosk";
-import Students from "./pages/Student";
-import Employees from "./pages/Employees";
-import Login from "./pages/Login";
-import Navbar from "./pages/Navbar";
-import Dashboard from "./pages/Dashboard";
+import Kiosk from "./pages/kiosk/Kiosk";
+import Students from "./pages/students/Student";
+import Employees from "./pages/employees/Employees";
+import Login from "./pages/auth/Login";
+import Navbar from "./components/navbar/Navbar";
+import Dashboard from "./pages/dashboard/Dashboard";
 import { authService } from "@/services/api";
 import { FingerprintScanner } from "@/pages/FingerprintScanner";
-import Announcement from "@/pages/Announcement";
-import AttendanceList from "@/pages/AttendanceList";
+import Announcement from "@/pages/announcement/Announcement";
+import AttendanceList from "@/pages/attendance/AttendanceList";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 // Main Layout with Navbar
