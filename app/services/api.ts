@@ -350,14 +350,16 @@ export const attendanceService = {
         }
     },
 
-    // Get attendance summary (if you add this endpoint)
-    getAttendanceSummary: async (startDate?: string, endDate?: string) => {
+    // Get attendance summary (UPDATED – accepts all filter params)
+    getAttendanceSummary: async (params?: {
+        student_number?: string;
+        date?: string;
+        status?: string;
+        date_from?: string;
+        date_to?: string;
+    }) => {
         try {
-            let url = '/attendance/summary';
-            if (startDate && endDate) {
-                url += `?start_date=${startDate}&end_date=${endDate}`;
-            }
-            const response = await api.get(url);
+            const response = await api.get('/attendance/summary', { params });
             return response.data;
         } catch (error) {
             console.error('Error fetching attendance summary:', error);
@@ -696,14 +698,16 @@ export const employeeAttendanceService = {
         }
     },
 
-    // Get employee attendance summary
-    getEmployeeAttendanceSummary: async (startDate?: string, endDate?: string) => {
+    // Get employee attendance summary (UPDATED – accepts all filter params)
+    getEmployeeAttendanceSummary: async (params?: {
+        employee_number?: string;
+        date?: string;
+        status?: string;
+        date_from?: string;
+        date_to?: string;
+    }) => {
         try {
-            let url = '/employee/attendance/summary';
-            if (startDate && endDate) {
-                url += `?start_date=${startDate}&end_date=${endDate}`;
-            }
-            const response = await api.get(url);
+            const response = await api.get('/employee/attendance/summary', { params });
             return response.data;
         } catch (error) {
             console.error('Error fetching employee attendance summary:', error);
@@ -832,32 +836,6 @@ export const employeeService = {
             throw error;
         }
     },
-
-    // Get employee statistics
-    // getEmployeeStats: async () => {
-    //     try {
-    //         // Reuse pending request if one exists
-    //         if (employeeService._getEmployeeStatsPending) {
-    //             return employeeService._getEmployeeStatsPending;
-    //         }
-
-    //         employeeService._getEmployeeStatsPending = api.get('/employees/stats');
-            
-    //         const response = await employeeService._getEmployeeStatsPending;
-    //         return response.data;
-    //     } catch (error) {
-    //         console.error('Error fetching employee stats:', error);
-    //         // Return fallback stats for development
-    //         return {
-    //             total_employees: 0,
-    //             active_employees: 0,
-    //             archived_employees: 0,
-    //             employees_by_department: {}
-    //         };
-    //     } finally {
-    //         employeeService._getEmployeeStatsPending = null;
-    //     }
-    // },
 
     // Search employees
     searchEmployees: async (query: string) => {

@@ -36,6 +36,7 @@ const Kiosk = () => {
   const [errorTitle, setErrorTitle] = useState("Not Registered");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
+  const [isFirstInteraction, setIsFirstInteraction] = useState(true);
 
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -44,13 +45,10 @@ const Kiosk = () => {
 
   // Reset inactivity timeout
   const resetInactivityTimer = () => {
-    if (inactivityTimeoutRef.current) {
-      clearTimeout(inactivityTimeoutRef.current);
+    if (isFirstInteraction) {
+      setShowWelcome(false);
+      setIsFirstInteraction(false);
     }
-    setShowWelcome(false);
-    inactivityTimeoutRef.current = setTimeout(() => {
-      setShowWelcome(true);
-    }, 30000);
   };
 
   // Close all modals
@@ -74,11 +72,10 @@ const Kiosk = () => {
 
   useEffect(() => {
     inputRef.current?.focus();
+    window.focus();
     updateDateTime();
     loadRecentRecords();
     loadAnnouncements();
-
-    resetInactivityTimer();
 
     const requestFullscreen = async () => {
       try {
@@ -98,6 +95,18 @@ const Kiosk = () => {
     };
 
     requestFullscreen();
+
+    // Handle page visibility to refocus on return from other pages
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        setTimeout(() => {
+          window.focus();
+          inputRef.current?.focus();
+        }, 100);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const handleKeyPress = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key === 'F12') {
@@ -129,6 +138,7 @@ const Kiosk = () => {
     return () => {
       clearInterval(interval);
       window.removeEventListener('keydown', handleKeyPress);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
       if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
       if (document.fullscreenElement) {

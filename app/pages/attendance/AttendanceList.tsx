@@ -229,6 +229,62 @@ const AttendanceList = () => {
     }));
   };
 
+  // ---------- STUDENT ATTENDANCE LOADING (now includes summary stats) ----------
+  const loadAttendanceRecords = async () => {
+    try {
+      setLoading(true);
+      const params: any = {
+        page: currentPage,
+        per_page: perPage,
+      };
+      if (searchTerm) params.student_number = searchTerm;
+      if (filterStatus !== "all") params.status = filterStatus;
+      if (startDate) params.date_from = startDate;
+      if (endDate) params.date_to = endDate;
+
+      // Fetch the paginated records (for the table)
+      const response = await attendanceService.getAttendances(params);
+      if (response.data && Array.isArray(response.data)) {
+        const transformed = transformAttendanceData(response.data);
+        setAttendanceRecords(transformed);
+
+        if (response.pagination) {
+          setTotalRecords(response.pagination.total);
+          setLastPage(response.pagination.last_page);
+          setCurrentPage(response.pagination.current_page);
+          setPerPage(response.pagination.per_page);
+        }
+      } else {
+        setAttendanceRecords([]);
+      }
+
+      // Fetch accurate summary from dedicated endpoint
+      const summaryParams: any = {};
+      if (searchTerm) summaryParams.student_number = searchTerm;
+      if (filterStatus !== "all") summaryParams.status = filterStatus;
+      if (startDate) summaryParams.date_from = startDate;
+      if (endDate) summaryParams.date_to = endDate;
+
+      const summaryResponse = await attendanceService.getAttendanceSummary(summaryParams);
+      const summaryData = summaryResponse.data; // { total_records, present, timed_out }
+
+      // Set stats: absent = total - present (simple approximation; no late/excused from this endpoint)
+      setStats({
+        total_records: summaryData.total_records ?? 0,
+        present_count: summaryData.present ?? 0,
+        absent_count: (summaryData.total_records ?? 0) - (summaryData.present ?? 0),
+        late_count: 0,
+        excused_count: 0,
+      });
+    } catch (error) {
+      console.error("Failed to load attendance records:", error);
+      setAttendanceRecords([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------- EMPLOYEE ATTENDANCE LOADING (enhanced with summary) ----------
   const loadEmployeeAttendance = async () => {
     try {
       setLoading(true);
@@ -238,6 +294,7 @@ const AttendanceList = () => {
       if (employeeStartDate) params.start_date = employeeStartDate;
       if (employeeEndDate) params.end_date = employeeEndDate;
 
+      // Fetch the actual records (for the table)
       const response = await api.get("/employee/attendance", { params });
       const data = response.data;
 
@@ -259,9 +316,33 @@ const AttendanceList = () => {
         if (data.summary) {
           setEmployeeTotalHours(data.summary.total_hours_worked);
         }
-
-        calculateEmployeeStats(mapped);
       }
+
+      // Fetch summary for total/present/absent
+      const summaryParams: any = {};
+      if (employeeSearchTerm) summaryParams.employee_number = employeeSearchTerm;
+      if (employeeFilterStatus !== "all") summaryParams.status = employeeFilterStatus;
+      if (employeeStartDate) summaryParams.date_from = employeeStartDate;
+      if (employeeEndDate) summaryParams.date_to = employeeEndDate;
+
+      const summaryRes = await api.get("/employee/attendance/summary", { params: summaryParams });
+      const sumData = summaryRes.data.data; // structure: { total_records, present, timed_out }
+
+      // Calculate late/excused locally (since the summary endpoint doesn't provide them)
+      const lateCount = (data?.data ?? []).filter(
+        (r: any) => r.status?.toLowerCase() === "late"
+      ).length;
+      const excusedCount = (data?.data ?? []).filter(
+        (r: any) => r.status?.toLowerCase() === "excused"
+      ).length;
+
+      setEmployeeStats({
+        total_records: sumData.total_records ?? 0,
+        present_count: sumData.present ?? 0,
+        absent_count: (sumData.total_records ?? 0) - (sumData.present ?? 0),
+        late_count: lateCount,
+        excused_count: excusedCount,
+      });
     } catch (error) {
       console.error("Failed to load employee attendance:", error);
       setEmployeeData([]);
@@ -271,93 +352,7 @@ const AttendanceList = () => {
     }
   };
 
-  const calculateEmployeeStats = (records: EmployeeAttendanceApi[]) => {
-    const stats: AttendanceStats = {
-      total_records: records.length,
-      present_count: records.filter(
-        (r) =>
-          r.status.toLowerCase() === "present" ||
-          r.status.toLowerCase() === "timed in" ||
-          r.status.toLowerCase() === "timed out",
-      ).length,
-      absent_count: records.filter((r) => r.status.toLowerCase() === "absent")
-        .length,
-      late_count: records.filter((r) => r.status.toLowerCase() === "late")
-        .length,
-      excused_count: records.filter(
-        (r) => r.status.toLowerCase() === "excused",
-      ).length,
-    };
-    setEmployeeStats(stats);
-  };
-
-  const handleRefresh = async () => {
-    setLoading(true);
-    try {
-      if (activeTab === "students") {
-        await loadAttendanceRecords();
-      } else {
-        await loadEmployeeAttendance();
-      }
-    } catch (error) {
-      console.error("Refresh failed:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadAttendanceRecords = async () => {
-    try {
-      setLoading(true);
-      const params: any = {
-        page: currentPage,
-        per_page: perPage,
-      };
-      if (searchTerm) params.student_number = searchTerm;
-      if (filterStatus !== "all") params.status = filterStatus;
-      if (startDate) params.date_from = startDate;
-      if (endDate) params.date_to = endDate;
-
-      // Use the existing service method (calls GET /attendance)
-      const response = await attendanceService.getAttendances(params);
-
-      // The new backend response: { message, data: [...], pagination: {...} }
-      if (response.data && Array.isArray(response.data)) {
-        const transformed = transformAttendanceData(response.data);
-        setAttendanceRecords(transformed);
-
-        if (response.pagination) {
-          setTotalRecords(response.pagination.total);
-          setLastPage(response.pagination.last_page);
-          setCurrentPage(response.pagination.current_page);
-          setPerPage(response.pagination.per_page);
-        }
-
-        // Simple stats from current page (you could enrich with backend counts if needed)
-        setStats({
-          total_records: response.pagination?.total || 0,
-          present_count: transformed.filter(
-            (r) => r.status.toLowerCase() === "present",
-          ).length,
-          absent_count: transformed.filter(
-            (r) => r.status.toLowerCase() === "absent",
-          ).length,
-          late_count: transformed.filter(
-            (r) => r.status.toLowerCase() === "late",
-          ).length,
-          excused_count: 0,
-        });
-      } else {
-        setAttendanceRecords([]);
-      }
-    } catch (error) {
-      console.error("Failed to load attendance records:", error);
-      setAttendanceRecords([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // ---------- EXPORT TO EXCEL (unchanged) ----------
   const exportToExcel = () => {
     let dataToExport: any[] = [];
 
@@ -426,6 +421,22 @@ const AttendanceList = () => {
     writeFile(workbook, filename);
   };
 
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === "students") {
+        await loadAttendanceRecords();
+      } else {
+        await loadEmployeeAttendance();
+      }
+    } catch (error) {
+      console.error("Refresh failed:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------- STATUS BADGES (unchanged) ----------
   const getStatusBadge = (status: string) => {
     const normalized = status.toLowerCase();
     if (normalized === "timed in" || normalized === "present") {
@@ -483,6 +494,7 @@ const AttendanceList = () => {
     return `https://api-sas.slarenasitsolutions.com/public/${path}`;
   };
 
+  // ---------- UI RENDERING (unchanged, but includes the stat cards that now use the updated stats) ----------
   return (
     <div className="space-y-6">
       {/* Header with Tabs */}
@@ -540,9 +552,9 @@ const AttendanceList = () => {
         </Button>
       </div>
 
-      {/* Stats Summary - Students */}
+      {/* Stats Summary - Students (now using the accurate stats from summary endpoint) */}
       {activeTab === "students" && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
           <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -588,40 +600,12 @@ const AttendanceList = () => {
               </div>
             </CardContent>
           </Card>
-
-          <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-amber-900">Late</p>
-                  <p className="text-2xl font-bold text-amber-700 mt-2">
-                    {stats.late_count}
-                  </p>
-                </div>
-                <Clock className="h-10 w-10 text-amber-500 opacity-80" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-blue-900">Excused</p>
-                  <p className="text-2xl font-bold text-blue-700 mt-2">
-                    {stats.excused_count}
-                  </p>
-                </div>
-                <CheckCircle className="h-10 w-10 text-blue-500 opacity-80" />
-              </div>
-            </CardContent>
-          </Card>
         </div>
       )}
 
-      {/* Stats Summary - Employees */}
+      {/* Stats Summary - Employees (now using the accurate stats) */}
       {activeTab === "employees" && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
           <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -667,38 +651,10 @@ const AttendanceList = () => {
               </div>
             </CardContent>
           </Card>
-
-          <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-amber-900">Late</p>
-                  <p className="text-2xl font-bold text-amber-700 mt-2">
-                    {employeeStats.late_count}
-                  </p>
-                </div>
-                <Clock className="h-10 w-10 text-amber-500 opacity-80" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-blue-900">Excused</p>
-                  <p className="text-2xl font-bold text-blue-700 mt-2">
-                    {employeeStats.excused_count}
-                  </p>
-                </div>
-                <CheckCircle className="h-10 w-10 text-blue-500 opacity-80" />
-              </div>
-            </CardContent>
-          </Card>
         </div>
       )}
 
-      {/* Search and Filter Bar - Students */}
+      {/* Search and Filter Bar - Students (unchanged) */}
       {activeTab === "students" && (
         <Card className="border-slate-200">
           <CardContent className="p-6">
@@ -811,7 +767,7 @@ const AttendanceList = () => {
         </Card>
       )}
 
-      {/* Search and Filter Bar - Employees */}
+      {/* Search and Filter Bar - Employees (unchanged) */}
       {activeTab === "employees" && (
         <Card className="border-slate-200">
           <CardContent className="p-6">
@@ -925,7 +881,7 @@ const AttendanceList = () => {
         </Card>
       )}
 
-      {/* Student Attendance Table */}
+      {/* Student Attendance Table (unchanged) */}
       {activeTab === "students" && (
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1119,7 +1075,7 @@ const AttendanceList = () => {
         </Card>
       )}
 
-      {/* Employee Attendance Table */}
+      {/* Employee Attendance Table (unchanged) */}
       {activeTab === "employees" && (
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
