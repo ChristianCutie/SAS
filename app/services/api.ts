@@ -593,6 +593,17 @@ export const announcementService = {
             console.error(`Error deleting announcement ${id}:`, error);
             throw error;
         }
+    },
+
+    // Archive announcement
+    archiveAnnouncement: async (id: number) => {
+        try {
+            const response = await api.post(`/announcements/archive/${id}`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error archiving announcement ${id}:`, error);
+            throw error;
+        }
     }
 };
 

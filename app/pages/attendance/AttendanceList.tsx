@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { utils, writeFile } from "xlsx";
 import { toast } from "sonner";
 import { attendanceService } from "@/services/api";
+import api from "@/services/api"; // Import the axios instance directly
 import {
   Table,
   TableBody,
@@ -24,9 +25,6 @@ import {
   Clock,
   Calendar,
   User,
-  Eye,
-  Edit,
-  Trash2,
   Users,
   UserCheck,
 } from "lucide-react";
@@ -62,30 +60,23 @@ interface AttendanceRecord {
   time_in: string;
   time_out: string | null;
   attendance_date: string;
-  status: "present" | "absent" | "late" | "excused";
+  status: string;
   created_at: string;
   updated_at: string;
   fingerprint_id: string | null;
   student: StudentData;
+  total_hours_rendered?: number; // from backend
 }
 
-interface RecentEmployeeAttendance {
-  type: "employee";
+interface EmployeeAttendanceApi {
   id: number;
   employee_number: string;
   attendance_date: string;
   time_in: string;
   time_out: string | null;
   status: string;
-  created_at: string;
-  employee?: {
-    id: number;
-    first_name: string;
-    last_name: string;
-    profile_picture: string | null;
-    department: string;
-    position: string;
-  } | null;
+  full_name: string | null;
+  profile_picture_url: string | null;
 }
 
 interface TransformedRecord {
@@ -100,9 +91,11 @@ interface TransformedRecord {
   attendance_date: string;
   check_in_time: string;
   check_out_time: string | null;
-  status: "present" | "absent" | "late" | "excused";
+  status: string;
   remarks: string | null;
   profile_picture: string | null;
+  total_hours_rendered?: number;
+  hours_worked: string; // record-level diff
 }
 
 interface AttendanceStats {
@@ -120,13 +113,6 @@ const AttendanceList = () => {
   const [attendanceRecords, setAttendanceRecords] = useState<
     TransformedRecord[]
   >([]);
-  //const [recentStudentAttendance, setRecentStudentAttendance] = useState<RecentStudentAttendance[]>([]);
-  const [recentEmployeeAttendance, setRecentEmployeeAttendance] = useState<
-    RecentEmployeeAttendance[]
-  >([]);
-  const [filteredEmployeeAttendance, setFilteredEmployeeAttendance] = useState<
-    RecentEmployeeAttendance[]
-  >([]);
   const [loading, setLoading] = useState(true);
 
   // Student filters
@@ -137,13 +123,15 @@ const AttendanceList = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // Employee filters
+  // Employee filters & data
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
   const [employeeFilterStatus, setEmployeeFilterStatus] = useState<
     "all" | "present" | "absent" | "late" | "excused"
   >("all");
   const [employeeStartDate, setEmployeeStartDate] = useState("");
   const [employeeEndDate, setEmployeeEndDate] = useState("");
+  const [employeeData, setEmployeeData] = useState<EmployeeAttendanceApi[]>([]);
+  const [employeeTotalHours, setEmployeeTotalHours] = useState<number>(0);
 
   const [perPage, setPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -164,25 +152,61 @@ const AttendanceList = () => {
     excused_count: 0,
   });
 
+  // Are any employee filters active?
+  const isEmployeeFiltered =
+    employeeSearchTerm !== "" ||
+    employeeFilterStatus !== "all" ||
+    employeeStartDate !== "" ||
+    employeeEndDate !== "";
+
+  // Are any student filters active?
+  const isStudentFiltered =
+    searchTerm !== "" ||
+    filterStatus !== "all" ||
+    startDate !== "" ||
+    endDate !== "";
+
+  // Student total hours from current page (record‑level)
+  const studentTotalHours = attendanceRecords.reduce((sum, record) => {
+    if (record.hours_worked !== "-") sum += parseFloat(record.hours_worked);
+    return sum;
+  }, 0);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterStatus, startDate, endDate]);
 
   useEffect(() => {
     loadAttendanceRecords();
-    loadRecentAttendance();
   }, [currentPage, perPage, searchTerm, filterStatus, startDate, endDate]);
 
   useEffect(() => {
-    filterEmployeeAttendance();
+    if (activeTab === "employees") {
+      loadEmployeeAttendance();
+    }
   }, [
-    recentEmployeeAttendance,
+    activeTab,
     employeeSearchTerm,
     employeeFilterStatus,
     employeeStartDate,
     employeeEndDate,
   ]);
 
+  // Helper: calculate worked hours from two timestamps
+  const calculateWorkedHours = (
+    timeIn: string,
+    timeOut: string | null,
+  ): string => {
+    if (!timeIn || !timeOut) return "-";
+    const start = new Date(timeIn);
+    const end = new Date(timeOut);
+    const diffMs = end.getTime() - start.getTime();
+    if (diffMs < 0) return "0.00";
+    const hours = diffMs / (1000 * 60 * 60);
+    return hours.toFixed(2);
+  };
+
+  // Transform data from backend to our local shape
   const transformAttendanceData = (
     apiData: AttendanceRecord[],
   ): TransformedRecord[] => {
@@ -201,59 +225,69 @@ const AttendanceList = () => {
       status: record.status,
       remarks: null,
       profile_picture: record.student.profile_picture,
+      total_hours_rendered: record.total_hours_rendered ?? 0,
+      hours_worked: calculateWorkedHours(record.time_in, record.time_out),
     }));
   };
 
-  const filterEmployeeAttendance = () => {
-    let filtered = [...recentEmployeeAttendance];
+  const loadEmployeeAttendance = async () => {
+    try {
+      setLoading(true);
+      const params: any = {};
+      if (employeeSearchTerm) params.search = employeeSearchTerm;
+      if (employeeFilterStatus !== "all") params.status = employeeFilterStatus;
+      if (employeeStartDate) params.start_date = employeeStartDate;
+      if (employeeEndDate) params.end_date = employeeEndDate;
 
-    // Filter by search term (employee number or name)
-    if (employeeSearchTerm) {
-      const searchLower = employeeSearchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (record) =>
-          record.employee_number.toLowerCase().includes(searchLower) ||
-          record.employee?.first_name.toLowerCase().includes(searchLower) ||
-          record.employee?.last_name.toLowerCase().includes(searchLower),
-      );
-    }
+      const response = await api.get("/employee/attendance", { params });
+      const data = response.data;
 
-    // Filter by status
-    if (employeeFilterStatus !== "all") {
-      filtered = filtered.filter(
-        (record) => record.status.toLowerCase() === employeeFilterStatus,
-      );
-    }
+      if (data.isSuccess) {
+        const mapped: EmployeeAttendanceApi[] = data.data.map(
+          (item: any) => ({
+            id: item.id,
+            employee_number: item.employee_number,
+            attendance_date: item.attendance_date,
+            time_in: item.time_in,
+            time_out: item.time_out,
+            status: item.status,
+            full_name: item.full_name ?? null,
+            profile_picture_url: item.profile_picture_url ?? null,
+          }),
+        );
+        setEmployeeData(mapped);
 
-    // Filter by date range
-    if (employeeStartDate) {
-      filtered = filtered.filter(
-        (record) =>
-          new Date(record.attendance_date) >= new Date(employeeStartDate),
-      );
-    }
-    if (employeeEndDate) {
-      filtered = filtered.filter(
-        (record) =>
-          new Date(record.attendance_date) <= new Date(employeeEndDate),
-      );
-    }
+        if (data.summary) {
+          setEmployeeTotalHours(data.summary.total_hours_worked);
+        }
 
-    setFilteredEmployeeAttendance(filtered);
-    calculateEmployeeStats(filtered);
+        calculateEmployeeStats(mapped);
+      }
+    } catch (error) {
+      console.error("Failed to load employee attendance:", error);
+      setEmployeeData([]);
+      setEmployeeTotalHours(0);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const calculateEmployeeStats = (records: RecentEmployeeAttendance[]) => {
+  const calculateEmployeeStats = (records: EmployeeAttendanceApi[]) => {
     const stats: AttendanceStats = {
       total_records: records.length,
-      present_count: records.filter((r) => r.status.toLowerCase() === "present")
-        .length,
+      present_count: records.filter(
+        (r) =>
+          r.status.toLowerCase() === "present" ||
+          r.status.toLowerCase() === "timed in" ||
+          r.status.toLowerCase() === "timed out",
+      ).length,
       absent_count: records.filter((r) => r.status.toLowerCase() === "absent")
         .length,
       late_count: records.filter((r) => r.status.toLowerCase() === "late")
         .length,
-      excused_count: records.filter((r) => r.status.toLowerCase() === "excused")
-        .length,
+      excused_count: records.filter(
+        (r) => r.status.toLowerCase() === "excused",
+      ).length,
     };
     setEmployeeStats(stats);
   };
@@ -264,7 +298,7 @@ const AttendanceList = () => {
       if (activeTab === "students") {
         await loadAttendanceRecords();
       } else {
-        await loadRecentAttendance();
+        await loadEmployeeAttendance();
       }
     } catch (error) {
       console.error("Refresh failed:", error);
@@ -273,51 +307,50 @@ const AttendanceList = () => {
     }
   };
 
-  const loadRecentAttendance = async () => {
-    try {
-      const response = await attendanceService.getRecentAttendanceSeparated();
-
-      if (response && response.employees) {
-        setRecentEmployeeAttendance(response.employees);
-      }
-    } catch (error) {
-      console.error("Failed to load recent attendance:", error);
-    }
-  };
-
   const loadAttendanceRecords = async () => {
     try {
       setLoading(true);
-      // Fetch attendance records with pagination and filters from backend API
-      const params = {
+      const params: any = {
         page: currentPage,
         per_page: perPage,
-        ...(searchTerm && { student_number: searchTerm }),
-        ...(filterStatus !== "all" && { status: filterStatus }),
-        ...(startDate && { date_from: startDate }),
-        ...(endDate && { date_to: endDate }),
       };
+      if (searchTerm) params.student_number = searchTerm;
+      if (filterStatus !== "all") params.status = filterStatus;
+      if (startDate) params.date_from = startDate;
+      if (endDate) params.date_to = endDate;
 
+      // Use the existing service method (calls GET /attendance)
       const response = await attendanceService.getAttendances(params);
-      const transformedData = transformAttendanceData(response.data);
-      setAttendanceRecords(transformedData);
 
-      // Update pagination info from response
-      if (response.pagination) {
-        setTotalRecords(response.pagination.total);
-        setLastPage(response.pagination.last_page);
-        setCurrentPage(response.pagination.current_page);
-        setPerPage(response.pagination.per_page);
+      // The new backend response: { message, data: [...], pagination: {...} }
+      if (response.data && Array.isArray(response.data)) {
+        const transformed = transformAttendanceData(response.data);
+        setAttendanceRecords(transformed);
+
+        if (response.pagination) {
+          setTotalRecords(response.pagination.total);
+          setLastPage(response.pagination.last_page);
+          setCurrentPage(response.pagination.current_page);
+          setPerPage(response.pagination.per_page);
+        }
+
+        // Simple stats from current page (you could enrich with backend counts if needed)
+        setStats({
+          total_records: response.pagination?.total || 0,
+          present_count: transformed.filter(
+            (r) => r.status.toLowerCase() === "present",
+          ).length,
+          absent_count: transformed.filter(
+            (r) => r.status.toLowerCase() === "absent",
+          ).length,
+          late_count: transformed.filter(
+            (r) => r.status.toLowerCase() === "late",
+          ).length,
+          excused_count: 0,
+        });
+      } else {
+        setAttendanceRecords([]);
       }
-
-      // Update stats with total count
-      setStats({
-        total_records: response.pagination?.total || 0,
-        present_count: 0,
-        absent_count: 0,
-        late_count: 0,
-        excused_count: 0,
-      });
     } catch (error) {
       console.error("Failed to load attendance records:", error);
       setAttendanceRecords([]);
@@ -325,20 +358,6 @@ const AttendanceList = () => {
       setLoading(false);
     }
   };
-
-  // const handleDelete = async (id: number) => {
-  //     if (window.confirm('Are you sure you want to delete this attendance record?')) {
-  //         try {
-  //             await attendanceService.deleteAttendance(id);
-  //             alert('Record deleted successfully');
-  //             loadAttendanceRecords();
-  //             loadStats();
-  //         } catch (error) {
-  //             alert('Failed to delete record');
-  //             console.error('Delete error:', error);
-  //         }
-  //     }
-  // };
 
   const exportToExcel = () => {
     let dataToExport: any[] = [];
@@ -354,52 +373,52 @@ const AttendanceList = () => {
         Date: new Date(record.attendance_date).toLocaleDateString(),
         "Check-in Time": record.check_in_time || "-",
         "Check-out Time": record.check_out_time || "-",
+        "Hours Worked": record.hours_worked,
         Status: record.status.charAt(0).toUpperCase() + record.status.slice(1),
-        Remarks: record.remarks || "-",
       }));
     } else {
-      if (recentEmployeeAttendance.length === 0) {
+      if (employeeData.length === 0) {
         toast.error("No records to export");
         return;
       }
-      dataToExport = recentEmployeeAttendance.map((record) => ({
+      dataToExport = employeeData.map((record) => ({
         "Employee Number": record.employee_number,
+        "Employee Name": record.full_name || "-",
         Date: new Date(record.attendance_date).toLocaleDateString(),
         "Check-in Time": record.time_in || "-",
         "Check-out Time": record.time_out || "-",
+        "Hours Worked": calculateWorkedHours(record.time_in, record.time_out),
         Status:
-          record.status?.charAt(0).toUpperCase() +
-            (record.status?.slice(1) || "") || "-",
+          record.status?.charAt(0).toUpperCase() + (record.status?.slice(1) || "") || "-",
       }));
     }
 
-    // Create workbook and worksheet
     const worksheet = utils.json_to_sheet(dataToExport);
     const workbook = utils.book_new();
     utils.book_append_sheet(workbook, worksheet, "Attendance Records");
 
-    // Set column widths
     const columnWidths =
       activeTab === "students"
         ? [
             { wch: 15 }, // Student Number
             { wch: 20 }, // Student Name
             { wch: 12 }, // Date
-            { wch: 15 }, // Check-in Time
-            { wch: 15 }, // Check-out Time
+            { wch: 15 }, // Check-in
+            { wch: 15 }, // Check-out
+            { wch: 12 }, // Hours Worked
             { wch: 12 }, // Status
-            { wch: 20 }, // Remarks
           ]
         : [
             { wch: 15 }, // Employee Number
+            { wch: 20 }, // Employee Name
             { wch: 12 }, // Date
-            { wch: 15 }, // Check-in Time
-            { wch: 15 }, // Check-out Time
+            { wch: 15 }, // Check-in
+            { wch: 15 }, // Check-out
+            { wch: 12 }, // Hours Worked
             { wch: 12 }, // Status
           ];
     worksheet["!cols"] = columnWidths;
 
-    // Generate filename
     const timestamp = new Date().toISOString().split("T")[0];
     const filePrefix =
       activeTab === "students" ? "Student_Attendance" : "Employee_Attendance";
@@ -408,18 +427,25 @@ const AttendanceList = () => {
     writeFile(workbook, filename);
   };
 
-  // Filter records based on search term, status, and date range
-  const filteredRecords = attendanceRecords;
-
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "present":
-        return (
-          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Present
-          </Badge>
-        );
+    const normalized = status.toLowerCase();
+    if (normalized === "timed in" || normalized === "present") {
+      return (
+        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200">
+          <CheckCircle className="h-3 w-3 mr-1" />
+          Present
+        </Badge>
+      );
+    }
+    if (normalized === "timed out") {
+      return (
+        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">
+          <CheckCircle className="h-3 w-3 mr-1" />
+          Timed Out
+        </Badge>
+      );
+    }
+    switch (normalized) {
       case "absent":
         return (
           <Badge className="bg-red-100 text-red-800 hover:bg-red-200">
@@ -467,7 +493,7 @@ const AttendanceList = () => {
           <p className="text-slate-600">
             {activeTab === "students"
               ? `Showing ${attendanceRecords.length > 0 ? (currentPage - 1) * perPage + 1 : 0} to ${Math.min(currentPage * perPage, totalRecords)} of ${totalRecords} records`
-              : `Showing ${recentEmployeeAttendance.length} recent employee records`}
+              : `Showing ${employeeData.length} employee records`}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -481,16 +507,16 @@ const AttendanceList = () => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-2  border-slate-200">
+      <div className="flex gap-2 border-slate-200">
         <Button
-        variant={"outline"}
+          variant={"outline"}
           onClick={() => {
             setActiveTab("students");
             setCurrentPage(1);
           }}
-          className={`px-4 py-2 font-medium  transition-all flex items-center gap-2 bg-white border ${
+          className={`px-4 py-2 font-medium transition-all flex items-center gap-2 bg-white border ${
             activeTab === "students"
-              ? " text-blue-600"
+              ? "text-blue-600"
               : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-gray-100"
           }`}
         >
@@ -499,7 +525,7 @@ const AttendanceList = () => {
         </Button>
 
         <Button
-        variant={"outline"}
+          variant={"outline"}
           onClick={() => {
             setActiveTab("employees");
             setCurrentPage(1);
@@ -515,7 +541,7 @@ const AttendanceList = () => {
         </Button>
       </div>
 
-      {/* Stats Summary - Only for Students */}
+      {/* Stats Summary - Students */}
       {activeTab === "students" && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
           <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
@@ -594,7 +620,7 @@ const AttendanceList = () => {
         </div>
       )}
 
-      {/* Stats Summary - For Employees */}
+      {/* Stats Summary - Employees */}
       {activeTab === "employees" && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
           <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
@@ -673,7 +699,7 @@ const AttendanceList = () => {
         </div>
       )}
 
-      {/* Search and Filter Bar - Only for Students */}
+      {/* Search and Filter Bar - Students */}
       {activeTab === "students" && (
         <Card className="border-slate-200">
           <CardContent className="p-6">
@@ -683,7 +709,7 @@ const AttendanceList = () => {
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                     <Input
-                      placeholder="Search by student number or name..."
+                      placeholder="Search by student number..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10"
@@ -691,9 +717,18 @@ const AttendanceList = () => {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1">
-                    <Filter className="h-4 w-4 mr-2" />
-                    More Filters
+                   <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setFilterStatus("all");
+                      setStartDate("");
+                      setEndDate("");
+                      setCurrentPage(1);
+                    }}
+                  >
+                    Clear Filters
                   </Button>
                   <Button
                     variant="outline"
@@ -706,8 +741,7 @@ const AttendanceList = () => {
                 </div>
               </div>
 
-              {/* Status and Date Range Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium text-slate-700 block mb-2">
                     Status
@@ -744,28 +778,9 @@ const AttendanceList = () => {
                     onChange={(e) => setEndDate(e.target.value)}
                   />
                 </div>
-                <div className="flex items-end">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      setSearchTerm("");
-                      setFilterStatus("all");
-                      setStartDate("");
-                      setEndDate("");
-                      setCurrentPage(1);
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                </div>
               </div>
 
-              {/* Active Filters Info */}
-              {(searchTerm ||
-                filterStatus !== "all" ||
-                startDate ||
-                endDate) && (
+              {isStudentFiltered && (
                 <div className="flex flex-wrap gap-2 items-center p-3 bg-blue-50 border border-blue-200 rounded-md">
                   <span className="text-sm text-blue-900 font-medium">
                     Active Filters:
@@ -797,7 +812,7 @@ const AttendanceList = () => {
         </Card>
       )}
 
-      {/* Search and Filter Bar - For Employees */}
+      {/* Search and Filter Bar - Employees */}
       {activeTab === "employees" && (
         <Card className="border-slate-200">
           <CardContent className="p-6">
@@ -815,14 +830,22 @@ const AttendanceList = () => {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1">
-                    <Filter className="h-4 w-4 mr-2" />
-                    More Filters
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setEmployeeSearchTerm("");
+                      setEmployeeFilterStatus("all");
+                      setEmployeeStartDate("");
+                      setEmployeeEndDate("");
+                    }}
+                  >
+                    Clear Filters
                   </Button>
                   <Button
                     variant="outline"
                     onClick={exportToExcel}
-                    disabled={filteredEmployeeAttendance.length === 0}
+                    disabled={employeeData.length === 0}
                     title="Export filtered records to Excel"
                   >
                     <Download className="h-4 w-4" />
@@ -830,8 +853,7 @@ const AttendanceList = () => {
                 </div>
               </div>
 
-              {/* Status and Date Range Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium text-slate-700 block mb-2">
                     Status
@@ -870,27 +892,9 @@ const AttendanceList = () => {
                     onChange={(e) => setEmployeeEndDate(e.target.value)}
                   />
                 </div>
-                <div className="flex items-end">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      setEmployeeSearchTerm("");
-                      setEmployeeFilterStatus("all");
-                      setEmployeeStartDate("");
-                      setEmployeeEndDate("");
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                </div>
               </div>
 
-              {/* Active Filters Info */}
-              {(employeeSearchTerm ||
-                employeeFilterStatus !== "all" ||
-                employeeStartDate ||
-                employeeEndDate) && (
+              {isEmployeeFiltered && (
                 <div className="flex flex-wrap gap-2 items-center p-3 bg-blue-50 border border-blue-200 rounded-md">
                   <span className="text-sm text-blue-900 font-medium">
                     Active Filters:
@@ -925,8 +929,17 @@ const AttendanceList = () => {
       {/* Student Attendance Table */}
       {activeTab === "students" && (
         <Card className="border-slate-200 shadow-sm">
-          <CardHeader className="border-b border-slate-100">
+          <CardHeader className="border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <CardTitle>Student Attendance Records</CardTitle>
+            {/* Total Hours badge – only when filters are active */}
+            {isStudentFiltered && (
+              <div className="text-sm font-medium text-slate-700 bg-blue-50 px-4 py-1.5 rounded-full border border-blue-200">
+                Total Hours (page):{" "}
+                <span className="font-bold text-blue-700">
+                  {studentTotalHours.toFixed(2)}
+                </span>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
@@ -936,14 +949,14 @@ const AttendanceList = () => {
                   Loading attendance records...
                 </p>
               </div>
-            ) : filteredRecords.length === 0 ? (
+            ) : attendanceRecords.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="h-16 w-16 text-slate-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-slate-900">
                   No records found
                 </h3>
                 <p className="text-slate-500 mt-1">
-                  {searchTerm || filterStatus !== "all" || startDate || endDate
+                  {isStudentFiltered
                     ? "Try adjusting your filters"
                     : "No attendance records available"}
                 </p>
@@ -966,15 +979,15 @@ const AttendanceList = () => {
                         Check-out
                       </TableHead>
                       <TableHead className="font-semibold text-slate-700">
-                        Status
+                        Hours Worked
                       </TableHead>
-                      <TableHead className="font-semibold text-slate-700 text-right">
-                        Actions
+                      <TableHead className="font-semibold text-slate-700">
+                        Status
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRecords.map((record) => (
+                    {attendanceRecords.map((record) => (
                       <TableRow
                         key={record.id}
                         className="hover:bg-slate-50/50 transition-colors"
@@ -1022,35 +1035,12 @@ const AttendanceList = () => {
                             {record.check_out_time || "-"}
                           </div>
                         </TableCell>
-                        <TableCell>{getStatusBadge(record.status)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-slate-600 hover:text-slate-700 hover:bg-slate-50 border-slate-200"
-                              title="View details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
-                              title="Edit record"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                              title="Delete record"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                        <TableCell>
+                          <div className="text-sm font-mono text-slate-700">
+                            {record.hours_worked}
                           </div>
                         </TableCell>
+                        <TableCell>{getStatusBadge(record.status)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1059,7 +1049,6 @@ const AttendanceList = () => {
             )}
           </CardContent>
 
-          {/* Pagination Controls */}
           {attendanceRecords.length > 0 && (
             <div className="border-t border-slate-100 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-2">
@@ -1134,8 +1123,16 @@ const AttendanceList = () => {
       {/* Employee Attendance Table */}
       {activeTab === "employees" && (
         <Card className="border-slate-200 shadow-sm">
-          <CardHeader className="border-b border-slate-100">
-            <CardTitle>Recent Employee Attendance</CardTitle>
+          <CardHeader className="border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <CardTitle>Employee Attendance</CardTitle>
+            {isEmployeeFiltered && (
+              <div className="text-sm font-medium text-slate-700 bg-blue-50 px-4 py-1.5 rounded-full border border-blue-200">
+                Total Hours Worked:{" "}
+                <span className="font-bold text-blue-700">
+                  {employeeTotalHours.toFixed(2)}
+                </span>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
@@ -1145,19 +1142,16 @@ const AttendanceList = () => {
                   Loading attendance records...
                 </p>
               </div>
-            ) : filteredEmployeeAttendance.length === 0 ? (
+            ) : employeeData.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="h-16 w-16 text-slate-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-slate-900">
                   No records found
                 </h3>
                 <p className="text-slate-500 mt-1">
-                  {employeeSearchTerm ||
-                  employeeFilterStatus !== "all" ||
-                  employeeStartDate ||
-                  employeeEndDate
+                  {isEmployeeFiltered
                     ? "Try adjusting your filters"
-                    : "No recent employee attendance records available"}
+                    : "No employee attendance records available"}
                 </p>
               </div>
             ) : (
@@ -1166,7 +1160,7 @@ const AttendanceList = () => {
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="font-semibold text-slate-700">
-                        Employee Number
+                        Employee Info
                       </TableHead>
                       <TableHead className="font-semibold text-slate-700">
                         Date
@@ -1178,29 +1172,44 @@ const AttendanceList = () => {
                         Check-out
                       </TableHead>
                       <TableHead className="font-semibold text-slate-700">
-                        Status
+                        Hours Worked
                       </TableHead>
-                      <TableHead className="font-semibold text-slate-700 text-right">
-                        Actions
+                      <TableHead className="font-semibold text-slate-700">
+                        Status
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredEmployeeAttendance.map((record) => (
+                    {employeeData.map((record) => (
                       <TableRow
                         key={record.id}
                         className="hover:bg-slate-50/50 transition-colors"
                       >
                         <TableCell>
-                          <div className="font-medium text-slate-900">
-                            {record.employee_number}
-                          </div>
-                          {record.employee && (
-                            <div className="text-sm text-slate-500">
-                              {record.employee.first_name}{" "}
-                              {record.employee.last_name}
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                              {record.profile_picture_url ? (
+                                <img
+                                  src={getImageUrl(record.profile_picture_url)}
+                                  alt="Profile"
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
+                              ) : (
+                                <User className="w-5 h-5 text-slate-600" />
+                              )}
                             </div>
-                          )}
+                            <div>
+                              <div className="font-medium text-slate-900">
+                                {record.full_name || record.employee_number}
+                              </div>
+                              <div className="text-sm text-slate-500">
+                                {record.employee_number}
+                              </div>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="text-sm text-slate-700">
@@ -1219,35 +1228,15 @@ const AttendanceList = () => {
                             {formatTimeIn(record.time_out)}
                           </div>
                         </TableCell>
-                        <TableCell>{getStatusBadge(record.status)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-slate-600 hover:text-slate-700 hover:bg-slate-50 border-slate-200"
-                              title="View details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
-                              title="Edit record"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                              title="Delete record"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                        <TableCell>
+                          <div className="text-sm font-mono text-slate-700">
+                            {calculateWorkedHours(
+                              record.time_in,
+                              record.time_out,
+                            )}
                           </div>
                         </TableCell>
+                        <TableCell>{getStatusBadge(record.status)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

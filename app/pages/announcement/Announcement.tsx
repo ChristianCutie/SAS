@@ -16,13 +16,13 @@ import { Label } from '../../components/ui/label';
 import Switch from '../../components/ui/switch';
 import {
   Plus,
-  Trash2,
   Search,
   Filter,
   Download,
   RefreshCw,
   Bell,
-  X
+  X,
+  Archive
 } from 'lucide-react';
 
 interface Announcement {
@@ -30,6 +30,7 @@ interface Announcement {
   content: string;
   title?: string;
   is_active: number;
+  is_archived: number;
   created_at: string;
   updated_at: string;
 }
@@ -47,7 +48,7 @@ const Announcement = () => {
     inactive_announcements: 0,
   });
   const [toggleLoading, setToggleLoading] = useState<number | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState<number | null>(null);
   const [isActive, setIsActive] = useState(true);
 
   // Fetch announcements on component mount
@@ -116,24 +117,28 @@ const Announcement = () => {
     }
   };
 
-  // Delete announcement
-  const handleDeleteAnnouncement = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this announcement?')) {
+  // Archive announcement
+  const handleArchiveAnnouncement = async (id: number) => {
+    if (!window.confirm('Are you sure you want to archive this announcement?')) {
       return;
     }
 
     try {
-      setDeleteLoading(id);
-      await announcementService.deleteAnnouncement(id);
+      setArchiveLoading(id);
+      await announcementService.archiveAnnouncement(id);
 
-      // Remove from list
-      setAnnouncements(announcements.filter(announcement => announcement.id !== id));
-      toast.success('Announcement deleted successfully!');
+      // Update the announcement in the list
+      setAnnouncements(announcements.map(announcement => 
+        announcement.id === id 
+          ? { ...announcement, is_archived: 1 }
+          : announcement
+      ));
+      toast.success('Announcement archived successfully!');
     } catch (err: any) {
-      console.error('Error deleting announcement:', err);
-      toast.error(err.response?.data?.message || 'Failed to delete announcement.');
+      console.error('Error archiving announcement:', err);
+      toast.error(err.response?.data?.message || 'Failed to archive announcement.');
     } finally {
-      setDeleteLoading(null);
+      setArchiveLoading(null);
     }
   };
 
@@ -173,8 +178,12 @@ const Announcement = () => {
     setIsActive(true);
   };
 
-  // Filter announcements based on search term
+  // Filter announcements based on search term and archive status
   const filteredAnnouncements = announcements.filter(announcement => {
+    // Exclude archived announcements from the main view
+    if (announcement.is_archived === 1) {
+      return false;
+    }
     const searchLower = searchTerm.toLowerCase();
     return (
       announcement.content.toLowerCase().includes(searchLower) ||
@@ -426,15 +435,16 @@ const Announcement = () => {
                         {formatDate(announcement.updated_at)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                            onClick={() => handleDeleteAnnouncement(announcement.id)}
-                            disabled={deleteLoading === announcement.id}
+                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 border-orange-200"
+                            onClick={() => handleArchiveAnnouncement(announcement.id)}
+                            disabled={archiveLoading === announcement.id}
+                            title="Archive announcement"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Archive className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
