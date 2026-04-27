@@ -165,11 +165,37 @@ const AttendanceList = () => {
     startDate !== "" ||
     endDate !== "";
 
+const parseHoursWorked = (hoursStr: string): number => {
+  if (hoursStr === "-") return 0;
+  const match = hoursStr.match(/(\d+)h\s+(\d+)m/);
+  if (!match) return 0;
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  return hours + minutes / 60;
+};
+
   // Student total hours from current page (record‑level)
   const studentTotalHours = attendanceRecords.reduce((sum, record) => {
-    if (record.hours_worked !== "-") sum += parseFloat(record.hours_worked);
+    sum += parseHoursWorked(record.hours_worked);
     return sum;
   }, 0);
+
+  // Helper: calculate worked hours from two timestamps
+  const calculateWorkedHours = (
+    timeIn: string,
+    timeOut: string | null,
+  ): string => {
+    if (!timeIn || !timeOut) return "-";
+    const start = new Date(timeIn);
+    const end = new Date(timeOut);
+    const diffMs = end.getTime() - start.getTime();
+    if (diffMs < 0) return "0h 0m";
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}h ${minutes}m`;
+  };
+
 
   useEffect(() => {
     setCurrentPage(1);
@@ -190,20 +216,6 @@ const AttendanceList = () => {
     employeeStartDate,
     employeeEndDate,
   ]);
-
-  // Helper: calculate worked hours from two timestamps
-  const calculateWorkedHours = (
-    timeIn: string,
-    timeOut: string | null,
-  ): string => {
-    if (!timeIn || !timeOut) return "-";
-    const start = new Date(timeIn);
-    const end = new Date(timeOut);
-    const diffMs = end.getTime() - start.getTime();
-    if (diffMs < 0) return "0.00";
-    const hours = diffMs / (1000 * 60 * 60);
-    return hours.toFixed(2);
-  };
 
   // Transform data from backend to our local shape
   const transformAttendanceData = (
@@ -365,8 +377,8 @@ const AttendanceList = () => {
         "Student Number": record.student_number,
         "Student Name": `${record.last_name}, ${record.first_name}`,
         Date: new Date(record.attendance_date).toLocaleDateString(),
-        "Check-in Time": record.check_in_time || "-",
-        "Check-out Time": record.check_out_time || "-",
+        "Check-in Time": formatTimeIn(record.check_in_time) || "-",
+        "Check-out Time": formatTimeIn(record.check_out_time) || "-",
         "Hours Worked": record.hours_worked,
         Status: record.status.charAt(0).toUpperCase() + record.status.slice(1),
       }));
@@ -379,8 +391,8 @@ const AttendanceList = () => {
         "Employee Number": record.employee_number,
         "Employee Name": record.full_name || "-",
         Date: new Date(record.attendance_date).toLocaleDateString(),
-        "Check-in Time": record.time_in || "-",
-        "Check-out Time": record.time_out || "-",
+        "Check-in Time": formatTimeIn(record.time_in) || "-",
+        "Check-out Time": formatTimeIn(record.time_out) || "-",
         "Hours Worked": calculateWorkedHours(record.time_in, record.time_out),
         Status:
           record.status?.charAt(0).toUpperCase() + (record.status?.slice(1) || "") || "-",
@@ -485,7 +497,7 @@ const AttendanceList = () => {
   const formatTimeIn = (time: string | null) => {
     if (!time) return "-";
     const date = new Date(time);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
   };
 
   const getImageUrl = (path: string | null): string | undefined => {
@@ -891,7 +903,11 @@ const AttendanceList = () => {
               <div className="text-sm font-medium text-slate-700 bg-blue-50 px-4 py-1.5 rounded-full border border-blue-200">
                 Total Hours (page):{" "}
                 <span className="font-bold text-blue-700">
-                  {studentTotalHours.toFixed(2)}
+                  {(() => {
+                    const hours = Math.floor(studentTotalHours);
+                    const minutes = Math.round((studentTotalHours - hours) * 60);
+                    return `${hours}h ${minutes}m`;
+                  })()}
                 </span>
               </div>
             )}
@@ -982,12 +998,12 @@ const AttendanceList = () => {
                         </TableCell>
                         <TableCell>
                           <div className="text-sm font-mono text-slate-700">
-                            {record.check_in_time || "-"}
+                            {formatTimeIn(record.check_in_time)}
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="text-sm font-mono text-slate-700">
-                            {record.check_out_time || "-"}
+                            {formatTimeIn(record.check_out_time)}
                           </div>
                         </TableCell>
                         <TableCell>
