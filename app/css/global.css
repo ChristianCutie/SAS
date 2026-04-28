@@ -13,3 +13,12 @@
   animation: marquee 35s linear infinite;
   padding-right: 2rem;
 }
+
+/* Hide cursor only on kiosk page */
+.kiosk-container {
+  cursor: none !important;
+}
+
+.kiosk-container * {
+  cursor: none !important;
+}

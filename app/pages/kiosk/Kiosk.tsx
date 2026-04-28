@@ -45,11 +45,23 @@ const Kiosk = () => {
 
   // Reset inactivity timeout
   const resetInactivityTimer = () => {
-    if (isFirstInteraction) {
-      setShowWelcome(false);
-      setIsFirstInteraction(false);
-    }
-  };
+  // First tap: hide welcome
+  if (isFirstInteraction) {
+    setShowWelcome(false);
+    setIsFirstInteraction(false);
+  }
+
+  // Clear previous timer
+  if (inactivityTimeoutRef.current) {
+    clearTimeout(inactivityTimeoutRef.current);
+  }
+
+  // Start new 20s timer
+  inactivityTimeoutRef.current = setTimeout(() => {
+    setShowWelcome(true);        // 👈 go back to welcome
+    setIsFirstInteraction(true); // 👈 allow cycle again
+  }, 20000); // 20 seconds
+};
 
   // Close all modals
   const closeAllModals = () => {
@@ -71,81 +83,89 @@ const Kiosk = () => {
   };
 
   useEffect(() => {
-    inputRef.current?.focus();
-    window.focus();
-    updateDateTime();
-    loadRecentRecords();
-    loadAnnouncements();
+  // HIDE CURSOR
+  const prevCursor = document.body.style.cursor;
+  document.body.style.cursor = "none";
 
-    const requestFullscreen = async () => {
-      try {
-        const elem = document.documentElement;
-        if (elem.requestFullscreen) {
-          await elem.requestFullscreen();
-        } else if ((elem as any).webkitRequestFullscreen) {
-          await (elem as any).webkitRequestFullscreen();
-        } else if ((elem as any).mozRequestFullScreen) {
-          await (elem as any).mozRequestFullScreen();
-        } else if ((elem as any).msRequestFullscreen) {
-          await (elem as any).msRequestFullscreen();
-        }
-      } catch (error) {
-        console.log('Fullscreen request failed or was denied:', error);
+  inputRef.current?.focus();
+  window.focus();
+  updateDateTime();
+  loadRecentRecords();
+  loadAnnouncements();
+
+  const requestFullscreen = async () => {
+    try {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        await elem.requestFullscreen();
+      } else if ((elem as any).webkitRequestFullscreen) {
+        await (elem as any).webkitRequestFullscreen();
+      } else if ((elem as any).mozRequestFullScreen) {
+        await (elem as any).mozRequestFullScreen();
+      } else if ((elem as any).msRequestFullscreen) {
+        await (elem as any).msRequestFullscreen();
       }
-    };
+    } catch (error) {
+      console.log('Fullscreen request failed or was denied:', error);
+    }
+  };
 
-    requestFullscreen();
+  requestFullscreen();
 
-    // Handle page visibility to refocus on return from other pages
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        setTimeout(() => {
-          window.focus();
-          inputRef.current?.focus();
-        }, 100);
-      }
-    };
+  const handleVisibilityChange = () => {
+    if (!document.hidden) {
+      setTimeout(() => {
+        window.focus();
+        inputRef.current?.focus();
+      }, 100);
+    }
+  };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    const handleKeyPress = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.key === 'F12') {
-        event.preventDefault();
-        if (document.fullscreenElement) {
-          document.exitFullscreen().then(() => {
-            navigate('/login');
-          });
-        } else {
-          navigate('/login');
-        }
-      }
-      if (event.key === 'F11') {
-        event.preventDefault();
-        if (document.fullscreenElement) {
-          document.exitFullscreen();
-        } else {
-          requestFullscreen();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-
-    const interval = setInterval(() => {
-      updateDateTime();
-    }, 1000);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('keydown', handleKeyPress);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
-      if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
+  const handleKeyPress = (event: KeyboardEvent) => {
+    if (event.ctrlKey && event.key === 'F12') {
+      event.preventDefault();
       if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().then(() => {
+          navigate('/login');
+        });
+      } else {
+        navigate('/login');
       }
-    };
-  }, [navigate]);
+    }
+    if (event.key === 'F11') {
+      event.preventDefault();
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        requestFullscreen();
+      }
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyPress);
+
+  const interval = setInterval(() => {
+    updateDateTime();
+  }, 1000);
+
+  return () => {
+    clearInterval(interval);
+    window.removeEventListener('keydown', handleKeyPress);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+
+    if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+    if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+
+    //RESTORE CURSOR WHEN LEAVING PAGE
+    document.body.style.cursor = prevCursor;
+  };
+}, [navigate]);
 
   const updateDateTime = () => {
     const now = new Date();
@@ -484,7 +504,7 @@ const Kiosk = () => {
     if (!path) return undefined;
     const cleanPath = path.replace(/\\/g, '');
     if (cleanPath.startsWith('http')) return cleanPath;
-    return `https://api-sas.slarenasitsolutions.com/public/${cleanPath}`;
+    return `http://127.0.0.1:8000/${cleanPath}`;
   };
 
   // const handleCardClick = (record: RecentRecord) => {
@@ -522,7 +542,7 @@ const Kiosk = () => {
   return (
     <div 
       className="w-screen h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-6 flex flex-col overflow-hidden relative pointer-events-none"
-      style={{ cursor: "none" }}
+      style={{ cursor: "none !important" }}
     >
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/20 rounded-full mix-blend-screen filter blur-3xl opacity-20 animate-blob"></div>
